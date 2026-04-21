@@ -3,10 +3,10 @@
 import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useTransition, useState } from "react"
+import { useTransition } from "react"
 import { toast } from "sonner"
-import { Plus, Trash2 } from "lucide-react"
-import type { Proveedor, UnidadMedida } from "@prisma/client"
+import { Plus, Trash2, CalendarClock } from "lucide-react"
+import type { UnidadMedida } from "@prisma/client"
 import { CondicionCompra } from "@prisma/client"
 import { compraSchema, type CompraInput } from "@/lib/validaciones/compras"
 import { crearCompra } from "@/server/actions/compras"
@@ -22,10 +22,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+type Proveedor = { id: string; nombreRazonSocial: string }
+
 type ProductoConUnidad = {
   id: string
   nombre: string
   codigo: string
+  controlaVencimiento: boolean
   unidadBase: { id: string; nombre: string; abreviatura: string }
 }
 
@@ -51,7 +54,7 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
     defaultValues: {
       condicion: CondicionCompra.CONTADO,
       descuento: 0,
-      detalles: [{ productoId: "", unidadId: "", cantidad: 0, precioUnitario: 0 }],
+      detalles: [{ productoId: "", unidadId: "", cantidad: 0, precioUnitario: 0, numeroLote: "", fechaVencimiento: "" }],
     },
   })
 
@@ -93,9 +96,7 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
               </SelectTrigger>
               <SelectContent>
                 {proveedores.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.nombreRazonSocial}
-                  </SelectItem>
+                  <SelectItem key={p.id} value={p.id}>{p.nombreRazonSocial}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -108,13 +109,9 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
             <Label>Condición de pago *</Label>
             <Select
               defaultValue={CondicionCompra.CONTADO}
-              onValueChange={(v: string | null) => {
-                if (v) setValue("condicion", v as CondicionCompra)
-              }}
+              onValueChange={(v: string | null) => { if (v) setValue("condicion", v as CondicionCompra) }}
             >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="CONTADO">Contado</SelectItem>
                 <SelectItem value="CUENTA_CORRIENTE">Cuenta Corriente</SelectItem>
@@ -124,11 +121,7 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
 
           <div className="space-y-1">
             <Label htmlFor="numeroComprobante">N° Comprobante (opcional)</Label>
-            <Input
-              id="numeroComprobante"
-              placeholder="ej: 0001-00002345"
-              {...register("numeroComprobante")}
-            />
+            <Input id="numeroComprobante" placeholder="ej: 0001-00002345" {...register("numeroComprobante")} />
           </div>
 
           <div className="space-y-1">
@@ -146,74 +139,62 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => append({ productoId: "", unidadId: "", cantidad: 0, precioUnitario: 0 })}
+            onClick={() => append({ productoId: "", unidadId: "", cantidad: 0, precioUnitario: 0, numeroLote: "", fechaVencimiento: "" })}
           >
             <Plus className="w-4 h-4 mr-1" />
             Agregar fila
           </Button>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
           {errors.detalles?.root && (
             <p className="text-xs text-destructive">{errors.detalles.root.message}</p>
           )}
 
-          <div className="grid grid-cols-[1fr_140px_100px_120px_36px] gap-2 text-xs font-medium text-slate-500 px-1">
-            <span>Producto</span>
-            <span>Unidad</span>
-            <span>Cantidad</span>
-            <span>Precio unit.</span>
-            <span />
-          </div>
-
           {fields.map((field, i) => {
-            const productoSeleccionado = productos.find(
-              (p) => p.id === detalles[i]?.productoId
-            )
-            const subtotalFila =
-              (Number(detalles[i]?.cantidad) || 0) *
-              (Number(detalles[i]?.precioUnitario) || 0)
+            const productoSeleccionado = productos.find((p) => p.id === detalles[i]?.productoId)
+            const requiereLote = productoSeleccionado?.controlaVencimiento === true
+            const subtotalFila = (Number(detalles[i]?.cantidad) || 0) * (Number(detalles[i]?.precioUnitario) || 0)
 
             return (
-              <div key={field.id} className="grid grid-cols-[1fr_140px_100px_120px_36px] gap-2 items-start">
-                {/* Producto */}
-                <div>
-                  <Select
-                    onValueChange={(v: string | null) => {
-                      if (!v) return
-                      setValue(`detalles.${i}.productoId`, v)
-                      const prod = productos.find((p) => p.id === v)
-                      if (prod) setValue(`detalles.${i}.unidadId`, prod.unidadBase.id)
-                    }}
-                  >
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Seleccioná..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {productos.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.nombre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.detalles?.[i]?.productoId && (
-                    <p className="text-xs text-destructive mt-0.5">
-                      {errors.detalles[i].productoId?.message}
-                    </p>
-                  )}
-                </div>
+              <div key={field.id} className="space-y-2 border rounded-lg p-3 bg-muted/20">
+                {/* Fila principal */}
+                <div className="grid grid-cols-[1fr_140px_90px_110px_32px] gap-2 items-start">
+                  {/* Producto */}
+                  <div>
+                    <Select
+                      onValueChange={(v: string | null) => {
+                        if (!v) return
+                        setValue(`detalles.${i}.productoId`, v)
+                        const prod = productos.find((p) => p.id === v)
+                        if (prod) setValue(`detalles.${i}.unidadId`, prod.unidadBase.id)
+                        // Limpiar campos de lote si cambia el producto
+                        setValue(`detalles.${i}.numeroLote`, "")
+                        setValue(`detalles.${i}.fechaVencimiento`, "")
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Seleccioná producto..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {productos.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.nombre}
+                            {p.controlaVencimiento && " 📅"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.detalles?.[i]?.productoId && (
+                      <p className="text-xs text-destructive mt-0.5">{errors.detalles[i].productoId?.message}</p>
+                    )}
+                  </div>
 
-                {/* Unidad */}
-                <div>
+                  {/* Unidad */}
                   <Select
                     value={detalles[i]?.unidadId || ""}
-                    onValueChange={(v: string | null) => {
-                      if (v) setValue(`detalles.${i}.unidadId`, v)
-                    }}
+                    onValueChange={(v: string | null) => { if (v) setValue(`detalles.${i}.unidadId`, v) }}
                   >
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Unidad" />
-                    </SelectTrigger>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Unidad" /></SelectTrigger>
                     <SelectContent>
                       {productoSeleccionado && (
                         <SelectItem value={productoSeleccionado.unidadBase.id}>
@@ -223,53 +204,72 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
                       {unidades
                         .filter((u) => u.id !== productoSeleccionado?.unidadBase.id)
                         .map((u) => (
-                          <SelectItem key={u.id} value={u.id}>
-                            {u.nombre}
-                          </SelectItem>
+                          <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
                         ))}
                     </SelectContent>
                   </Select>
-                </div>
 
-                {/* Cantidad */}
-                <Input
-                  type="number"
-                  step="0.001"
-                  min="0"
-                  className="h-8 text-xs"
-                  {...register(`detalles.${i}.cantidad`, { valueAsNumber: true })}
-                />
-
-                {/* Precio unitario */}
-                <div>
+                  {/* Cantidad */}
                   <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
+                    type="number" step="0.001" min="0"
                     className="h-8 text-xs"
-                    {...register(`detalles.${i}.precioUnitario`, { valueAsNumber: true })}
+                    placeholder="0"
+                    {...register(`detalles.${i}.cantidad`, { valueAsNumber: true })}
                   />
-                  {subtotalFila > 0 && (
-                    <p className="text-xs text-slate-400 mt-0.5 text-right">
-                      {new Intl.NumberFormat("es-AR", {
-                        style: "currency",
-                        currency: "ARS",
-                      }).format(subtotalFila)}
-                    </p>
-                  )}
+
+                  {/* Precio */}
+                  <div>
+                    <Input
+                      type="number" step="0.01" min="0"
+                      className="h-8 text-xs"
+                      placeholder="0.00"
+                      {...register(`detalles.${i}.precioUnitario`, { valueAsNumber: true })}
+                    />
+                    {subtotalFila > 0 && (
+                      <p className="text-xs text-slate-400 mt-0.5 text-right">
+                        {new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(subtotalFila)}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Eliminar */}
+                  <Button
+                    type="button" variant="ghost" size="sm"
+                    className="h-8 w-8 p-0 text-slate-400 hover:text-red-500"
+                    onClick={() => remove(i)}
+                    disabled={fields.length === 1}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
 
-                {/* Eliminar fila */}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 text-slate-400 hover:text-red-500"
-                  onClick={() => remove(i)}
-                  disabled={fields.length === 1}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+                {/* Fila de lote — solo si el producto controla vencimiento */}
+                {requiereLote && (
+                  <div className="grid grid-cols-[1fr_1fr] gap-2 pt-1 border-t border-dashed">
+                    <div className="space-y-1">
+                      <Label className="text-xs flex items-center gap-1 text-amber-700">
+                        <CalendarClock className="h-3 w-3" />
+                        N° Lote (opcional)
+                      </Label>
+                      <Input
+                        className="h-7 text-xs"
+                        placeholder="ej: L2024-001"
+                        {...register(`detalles.${i}.numeroLote`)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs flex items-center gap-1 text-amber-700">
+                        <CalendarClock className="h-3 w-3" />
+                        Fecha de vencimiento
+                      </Label>
+                      <Input
+                        type="date"
+                        className="h-7 text-xs"
+                        {...register(`detalles.${i}.fechaVencimiento`)}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -289,9 +289,7 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
             <div className="flex items-center gap-8">
               <span className="text-slate-500">Descuento</span>
               <Input
-                type="number"
-                step="0.01"
-                min="0"
+                type="number" step="0.01" min="0"
                 className="h-7 w-32 text-right text-sm"
                 {...register("descuento", { valueAsNumber: true })}
               />
@@ -307,9 +305,7 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
       </Card>
 
       <div className="flex gap-3 justify-end">
-        <Button type="button" variant="outline" onClick={() => router.push("/compras")}>
-          Cancelar
-        </Button>
+        <Button type="button" variant="outline" onClick={() => router.push("/compras")}>Cancelar</Button>
         <Button type="submit" disabled={isPending}>
           {isPending ? "Registrando..." : "Registrar compra"}
         </Button>
