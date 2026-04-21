@@ -7,7 +7,7 @@ import { crearVenta } from "@/server/actions/ventas"
 import { VentaInput } from "@/lib/validaciones/ventas"
 
 export default async function NuevaVentaPage() {
-  const [clientes, productos, unidades] = await Promise.all([
+  const [clientes, productosRaw, unidades] = await Promise.all([
     obtenerClientes(),
     prisma.producto.findMany({
       where: { activo: true, deletedAt: null },
@@ -16,6 +16,19 @@ export default async function NuevaVentaPage() {
     }),
     prisma.unidadMedida.findMany({ where: { activa: true }, orderBy: { nombre: "asc" } }),
   ])
+
+  // Convertir Decimal a number para poder pasarlos al Client Component
+  const productos = productosRaw.map((p) => ({
+    ...p,
+    precioVenta: Number(p.precioVenta),
+    precioCompra: Number(p.precioCompra),
+    stockTotal: Number(p.stockTotal),
+    stockMinimo: Number(p.stockMinimo),
+    unidadesAlternativas: p.unidadesAlternativas.map((ua) => ({
+      ...ua,
+      factor: Number(ua.factor),
+    })),
+  }))
 
   async function accionCrear(data: VentaInput) {
     "use server"
