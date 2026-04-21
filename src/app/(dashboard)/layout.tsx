@@ -43,7 +43,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             Comercial
           </p>
           <NavLink href="/clientes" icon={<Users />}>Clientes</NavLink>
-          <NavLink href="/ventas" icon={<ShoppingCart />} deshabilitado>Ventas</NavLink>
+          <NavLink href="/ventas" icon={<ShoppingCart />}>Ventas</NavLink>
           <NavLink href="/remitos" icon={<FileText />} deshabilitado>Remitos</NavLink>
           <NavLink href="/caja" icon={<Wallet />} deshabilitado>Caja diaria</NavLink>
           <NavLink href="/cuentas" icon={<CreditCard />}>Cuentas corrientes</NavLink>
