@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useForm, Controller } from "react-hook-form"
+import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -17,20 +17,21 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
+import { cn } from "@/lib/utils"
 
 interface Props {
   valoresIniciales?: Partial<DatosCliente>
   onSubmit: (data: DatosCliente) => Promise<{ ok?: boolean; error?: string }>
   modoEdicion?: boolean
 }
+
+// Estilo compartido para los <select> nativos, igual al Input de shadcn
+const selectClasses = cn(
+  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm",
+  "outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+  "disabled:cursor-not-allowed disabled:opacity-50"
+)
 
 export function FormularioCliente({ valoresIniciales, onSubmit, modoEdicion = false }: Props) {
   const router = useRouter()
@@ -39,7 +40,6 @@ export function FormularioCliente({ valoresIniciales, onSubmit, modoEdicion = fa
   const {
     register,
     handleSubmit,
-    control,
     formState: { errors },
   } = useForm<DatosCliente>({
     resolver: zodResolver(esquemaCliente),
@@ -84,25 +84,12 @@ export function FormularioCliente({ valoresIniciales, onSubmit, modoEdicion = fa
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
-            <Label>Tipo de documento *</Label>
-            <Controller
-              control={control}
-              name="tipoDocumento"
-              render={({ field }) => (
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccioná el tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(etiquetasTipoDocumento).map(([valor, etiqueta]) => (
-                      <SelectItem key={valor} value={valor}>
-                        {etiqueta}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
+            <Label htmlFor="tipoDocumento">Tipo de documento *</Label>
+            <select id="tipoDocumento" className={selectClasses} {...register("tipoDocumento")}>
+              {Object.entries(etiquetasTipoDocumento).map(([valor, etiqueta]) => (
+                <option key={valor} value={valor}>{etiqueta}</option>
+              ))}
+            </select>
             {errors.tipoDocumento && (
               <p className="text-sm text-destructive">{errors.tipoDocumento.message}</p>
             )}
@@ -122,25 +109,12 @@ export function FormularioCliente({ valoresIniciales, onSubmit, modoEdicion = fa
         </div>
 
         <div className="space-y-1">
-          <Label>Condición IVA *</Label>
-          <Controller
-            control={control}
-            name="condicionIva"
-            render={({ field }) => (
-              <Select onValueChange={field.onChange} value={field.value}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccioná la condición" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(etiquetasCondicionIva).map(([valor, etiqueta]) => (
-                    <SelectItem key={valor} value={valor}>
-                      {etiqueta}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
+          <Label htmlFor="condicionIva">Condición IVA *</Label>
+          <select id="condicionIva" className={selectClasses} {...register("condicionIva")}>
+            {Object.entries(etiquetasCondicionIva).map(([valor, etiqueta]) => (
+              <option key={valor} value={valor}>{etiqueta}</option>
+            ))}
+          </select>
           {errors.condicionIva && (
             <p className="text-sm text-destructive">{errors.condicionIva.message}</p>
           )}
