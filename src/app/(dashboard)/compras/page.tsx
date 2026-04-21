@@ -8,7 +8,7 @@ import { ComprasTable } from "./ComprasTable"
 export const dynamic = "force-dynamic"
 
 export default async function ComprasPage() {
-  const compras = await prisma.compra.findMany({
+  const comprasRaw = await prisma.compra.findMany({
     include: {
       proveedor: { select: { nombreRazonSocial: true } },
       creadaPor: { select: { nombre: true } },
@@ -16,6 +16,13 @@ export default async function ComprasPage() {
     orderBy: { fecha: "desc" },
     take: 100,
   })
+
+  const compras = comprasRaw.map((c) => ({
+    ...c,
+    subtotal: Number(c.subtotal),
+    descuento: Number(c.descuento),
+    total: Number(c.total),
+  }))
 
   return (
     <div className="space-y-4">
