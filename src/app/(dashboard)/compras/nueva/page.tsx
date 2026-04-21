@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { FormCompra } from "./FormCompra"
 
 export default async function NuevaCompraPage() {
-  const [proveedores, productos, unidades] = await Promise.all([
+  const [proveedores, productosRaw, unidades] = await Promise.all([
     prisma.proveedor.findMany({
       where: { activo: true },
       orderBy: { nombreRazonSocial: "asc" },
@@ -17,6 +17,14 @@ export default async function NuevaCompraPage() {
       orderBy: { nombre: "asc" },
     }),
   ])
+
+  const productos = productosRaw.map((p) => ({
+    ...p,
+    precioVenta: Number(p.precioVenta),
+    precioCompra: Number(p.precioCompra),
+    stockTotal: Number(p.stockTotal),
+    stockMinimo: Number(p.stockMinimo),
+  }))
 
   return (
     <div className="max-w-4xl space-y-4">

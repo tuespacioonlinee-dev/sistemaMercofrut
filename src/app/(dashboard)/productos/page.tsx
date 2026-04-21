@@ -8,13 +8,21 @@ import { ProductosTable } from "./ProductosTable"
 export const dynamic = "force-dynamic"
 
 export default async function ProductosPage() {
-  const productos = await prisma.producto.findMany({
+  const productosRaw = await prisma.producto.findMany({
     include: {
       categoria: { select: { nombre: true } },
       unidadBase: { select: { abreviatura: true } },
     },
     orderBy: { nombre: "asc" },
   })
+
+  const productos = productosRaw.map((p) => ({
+    ...p,
+    precioVenta: Number(p.precioVenta),
+    precioCompra: Number(p.precioCompra),
+    stockTotal: Number(p.stockTotal),
+    stockMinimo: Number(p.stockMinimo),
+  }))
 
   return (
     <div className="space-y-4">
