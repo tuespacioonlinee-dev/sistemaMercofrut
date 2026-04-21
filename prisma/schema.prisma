@@ -67,6 +67,7 @@ model UnidadMedida {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
+  productos         Producto[]
   productosUnidades ProductoUnidad[]
   detallesVenta     DetalleVenta[]
   detallesCompra    DetalleCompra[]
