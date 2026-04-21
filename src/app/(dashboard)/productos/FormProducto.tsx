@@ -12,14 +12,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Card, CardContent } from "@/components/ui/card"
+import { cn } from "@/lib/utils"
+
+const selectClasses = cn(
+  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm",
+  "outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+  "disabled:opacity-50"
+)
 
 interface Props {
   categorias: Categoria[]
@@ -37,7 +37,7 @@ export function FormProducto({ categorias, unidades, producto }: Props) {
     setValue,
     watch,
     formState: { errors },
-  } = useForm<ProductoInput>({
+  } = useForm<ProductoInput>({ // setValue se sigue usando para el Checkbox
     resolver: zodResolver(productoSchema),
     defaultValues: producto
       ? {
@@ -99,22 +99,13 @@ export function FormProducto({ categorias, unidades, producto }: Props) {
 
           {/* Categoría */}
           <div className="space-y-1">
-            <Label>Categoría *</Label>
-            <Select
-              defaultValue={producto?.categoriaId}
-              onValueChange={(v: string | null) => { if (v) setValue("categoriaId", v) }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccioná una categoría" />
-              </SelectTrigger>
-              <SelectContent>
-                {categorias.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="categoriaId">Categoría *</Label>
+            <select id="categoriaId" className={selectClasses} {...register("categoriaId")}>
+              <option value="">Seleccioná una categoría</option>
+              {categorias.map((c) => (
+                <option key={c.id} value={c.id}>{c.nombre}</option>
+              ))}
+            </select>
             {errors.categoriaId && (
               <p className="text-xs text-destructive">{errors.categoriaId.message}</p>
             )}
@@ -122,22 +113,13 @@ export function FormProducto({ categorias, unidades, producto }: Props) {
 
           {/* Unidad base */}
           <div className="space-y-1">
-            <Label>Unidad base *</Label>
-            <Select
-              defaultValue={producto?.unidadBaseId}
-              onValueChange={(v: string | null) => { if (v) setValue("unidadBaseId", v) }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccioná una unidad" />
-              </SelectTrigger>
-              <SelectContent>
-                {unidades.map((u) => (
-                  <SelectItem key={u.id} value={u.id}>
-                    {u.nombre} ({u.abreviatura})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="unidadBaseId">Unidad base *</Label>
+            <select id="unidadBaseId" className={selectClasses} {...register("unidadBaseId")}>
+              <option value="">Seleccioná una unidad</option>
+              {unidades.map((u) => (
+                <option key={u.id} value={u.id}>{u.nombre} ({u.abreviatura})</option>
+              ))}
+            </select>
             {errors.unidadBaseId && (
               <p className="text-xs text-destructive">{errors.unidadBaseId.message}</p>
             )}
