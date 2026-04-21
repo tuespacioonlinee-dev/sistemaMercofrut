@@ -66,7 +66,7 @@ export async function crearCompra(data: unknown) {
       },
     })
 
-    // 2. Actualizar stock de cada producto + registrar movimiento
+    // 2. Actualizar stock + registrar movimiento + crear lote si corresponde
     for (const d of detallesConBase) {
       const producto = productos.find((p) => p.id === d.productoId)!
       const stockAnterior = Number(producto.stockTotal)
@@ -89,6 +89,19 @@ export async function crearCompra(data: unknown) {
           origenId: compra.id,
         },
       })
+
+      // Crear lote si el producto controla vencimiento
+      if (producto.controlaVencimiento) {
+        await tx.loteProducto.create({
+          data: {
+            productoId: d.productoId,
+            numeroLote: d.numeroLote || null,
+            cantidadInicial: d.cantidadBase,
+            cantidadActual: d.cantidadBase,
+            fechaVencimiento: d.fechaVencimiento ? new Date(d.fechaVencimiento) : null,
+          },
+        })
+      }
     }
 
     // 3. Si es a cuenta corriente, registrar en la cuenta del proveedor
@@ -136,7 +149,8 @@ export async function crearCompra(data: unknown) {
   })
 
   revalidatePath("/compras")
-  revalidatePath("/productos")
+  revalidatePath("/stock")
+  revalidatePath("/lotes")
   return { ok: true }
 }
 
@@ -183,6 +197,12 @@ export async function anularCompra(id: string, motivo: string) {
           origenTipo: "compra",
           origenId: id,
         },
+      })
+
+      // Desactivar lotes creados por esta compra
+      await tx.loteProducto.updateMany({
+        where: { productoId: detalle.productoId, activo: true },
+        data: { activo: false },
       })
     }
 
