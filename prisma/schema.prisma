@@ -1,0 +1,591 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// USUARIOS Y PERMISOS
+// ============================================================================
+
+enum RolUsuario {
+  ADMIN
+  VENDEDOR
+  COMPRADOR
+  CONSULTA
+}
+
+model Usuario {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  nombre       String
+  passwordHash String
+  rol          RolUsuario  @default(CONSULTA)
+  activo       Boolean     @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  ventasRealizadas   Venta[]             @relation("VentaCreadaPor")
+  comprasRealizadas  Compra[]            @relation("CompraCreadaPor")
+  cajasAbiertas      CajaDiaria[]        @relation("CajaAbiertaPor")
+  cajasCerradas      CajaDiaria[]        @relation("CajaCerradaPor")
+  movimientosStock   MovimientoStock[]
+  movimientosCaja    MovimientoCaja[]
+  movimientosCuenta  MovimientoCuenta[]
+
+  @@index([email])
+}
+
+// ============================================================================
+// CATÁLOGO: CATEGORÍAS, UNIDADES, PRODUCTOS
+// ============================================================================
+
+model Categoria {
+  id     String  @id @default(cuid())
+  nombre String  @unique
+  activa Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  productos Producto[]
+}
+
+model UnidadMedida {
+  id          String  @id @default(cuid())
+  nombre      String  @unique
+  abreviatura String  @unique
+  activa      Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  productosUnidades ProductoUnidad[]
+  detallesVenta     DetalleVenta[]
+  detallesCompra    DetalleCompra[]
+}
+
+model Producto {
+  id                  String  @id @default(cuid())
+  codigo              String  @unique
+  nombre              String
+  categoriaId         String
+  unidadBaseId        String
+  precioVenta         Decimal @db.Decimal(12, 2)
+  precioCompra        Decimal @db.Decimal(12, 2) @default(0)
+  stockTotal          Decimal @db.Decimal(12, 3) @default(0)
+  stockMinimo         Decimal @db.Decimal(12, 3) @default(0)
+  controlaVencimiento Boolean @default(false)
+  activo              Boolean @default(true)
+
+  categoria  Categoria    @relation(fields: [categoriaId], references: [id])
+  unidadBase UnidadMedida @relation(fields: [unidadBaseId], references: [id])
+
+  unidadesAlternativas ProductoUnidad[]
+  movimientosStock     MovimientoStock[]
+  detallesVenta        DetalleVenta[]
+  detallesCompra       DetalleCompra[]
+  lotes                LoteProducto[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([codigo])
+  @@index([nombre])
+  @@index([categoriaId])
+}
+
+model ProductoUnidad {
+  id         String  @id @default(cuid())
+  productoId String
+  unidadId   String
+  factor     Decimal @db.Decimal(12, 4)
+
+  producto Producto     @relation(fields: [productoId], references: [id])
+  unidad   UnidadMedida @relation(fields: [unidadId], references: [id])
+
+  @@unique([productoId, unidadId])
+}
+
+model LoteProducto {
+  id               String    @id @default(cuid())
+  productoId       String
+  numeroLote       String?
+  fechaIngreso     DateTime  @default(now())
+  fechaVencimiento DateTime?
+  cantidadInicial  Decimal   @db.Decimal(12, 3)
+  cantidadActual   Decimal   @db.Decimal(12, 3)
+  activo           Boolean   @default(true)
+
+  producto Producto @relation(fields: [productoId], references: [id])
+
+  @@index([productoId])
+  @@index([fechaVencimiento])
+}
+
+// ============================================================================
+// STOCK: MOVIMIENTOS
+// ============================================================================
+
+enum TipoMovimientoStock {
+  INGRESO_COMPRA
+  EGRESO_VENTA
+  AJUSTE_POSITIVO
+  AJUSTE_NEGATIVO
+  DEVOLUCION_CLIENTE
+  DEVOLUCION_PROVEEDOR
+}
+
+model MovimientoStock {
+  id             String              @id @default(cuid())
+  productoId     String
+  tipo           TipoMovimientoStock
+  cantidad       Decimal             @db.Decimal(12, 3)
+  stockAnterior  Decimal             @db.Decimal(12, 3)
+  stockPosterior Decimal             @db.Decimal(12, 3)
+  motivo         String?
+  usuarioId      String
+  fecha          DateTime            @default(now())
+
+  origenTipo String?
+  origenId   String?
+
+  producto Producto @relation(fields: [productoId], references: [id])
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id])
+
+  @@index([productoId])
+  @@index([fecha])
+  @@index([origenTipo, origenId])
+}
+
+// ============================================================================
+// CLIENTES Y PROVEEDORES
+// ============================================================================
+
+enum CondicionIva {
+  RESPONSABLE_INSCRIPTO
+  MONOTRIBUTO
+  EXENTO
+  CONSUMIDOR_FINAL
+  NO_RESPONSABLE
+}
+
+enum TipoDocumento {
+  CUIT
+  CUIL
+  DNI
+  PASAPORTE
+  OTRO
+}
+
+model Cliente {
+  id                String        @id @default(cuid())
+  nombreRazonSocial String
+  tipoDocumento     TipoDocumento @default(DNI)
+  documento         String        @unique
+  condicionIva      CondicionIva  @default(CONSUMIDOR_FINAL)
+  direccion         String?
+  localidad         String?
+  telefono          String?
+  email             String?
+  observaciones     String?
+  activo            Boolean       @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  cuentas Cuenta[]
+  ventas  Venta[]
+
+  @@index([nombreRazonSocial])
+  @@index([documento])
+}
+
+model Proveedor {
+  id                String        @id @default(cuid())
+  nombreRazonSocial String
+  tipoDocumento     TipoDocumento @default(CUIT)
+  documento         String        @unique
+  condicionIva      CondicionIva  @default(RESPONSABLE_INSCRIPTO)
+  direccion         String?
+  localidad         String?
+  telefono          String?
+  email             String?
+  observaciones     String?
+  activo            Boolean       @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  cuentas Cuenta[]
+  compras Compra[]
+
+  @@index([nombreRazonSocial])
+  @@index([documento])
+}
+
+// ============================================================================
+// CUENTAS CORRIENTES
+// ============================================================================
+
+enum TipoCuenta {
+  CONTADO
+  CORRIENTE
+}
+
+enum TitularCuenta {
+  CLIENTE
+  PROVEEDOR
+  PROPIA
+}
+
+model Cuenta {
+  id          String        @id @default(cuid())
+  nombre      String
+  tipo        TipoCuenta
+  titular     TitularCuenta
+  clienteId   String?
+  proveedorId String?
+  saldo       Decimal       @db.Decimal(14, 2) @default(0)
+  activa      Boolean       @default(true)
+
+  cliente   Cliente?   @relation(fields: [clienteId], references: [id])
+  proveedor Proveedor? @relation(fields: [proveedorId], references: [id])
+
+  movimientos MovimientoCuenta[]
+  ventas      Venta[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([clienteId])
+  @@index([proveedorId])
+}
+
+enum TipoMovCuenta {
+  DEBE
+  HABER
+  AJUSTE
+}
+
+model MovimientoCuenta {
+  id             String        @id @default(cuid())
+  cuentaId       String
+  tipo           TipoMovCuenta
+  monto          Decimal       @db.Decimal(14, 2)
+  saldoAnterior  Decimal       @db.Decimal(14, 2)
+  saldoPosterior Decimal       @db.Decimal(14, 2)
+  descripcion    String
+  fecha          DateTime      @default(now())
+  usuarioId      String
+
+  origenTipo String?
+  origenId   String?
+
+  cuenta  Cuenta  @relation(fields: [cuentaId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@index([cuentaId])
+  @@index([fecha])
+  @@index([origenTipo, origenId])
+}
+
+// ============================================================================
+// CAJA DIARIA
+// ============================================================================
+
+enum EstadoCaja {
+  ABIERTA
+  CERRADA
+}
+
+model CajaDiaria {
+  id            String     @id @default(cuid())
+  fechaApertura DateTime   @default(now())
+  fechaCierre   DateTime?
+  saldoInicial  Decimal    @db.Decimal(14, 2)
+  saldoFinal    Decimal?   @db.Decimal(14, 2)
+  saldoArqueo   Decimal?   @db.Decimal(14, 2)
+  diferencia    Decimal?   @db.Decimal(14, 2)
+  estado        EstadoCaja @default(ABIERTA)
+  observaciones String?
+  abiertaPorId  String
+  cerradaPorId  String?
+
+  abiertaPor Usuario  @relation("CajaAbiertaPor", fields: [abiertaPorId], references: [id])
+  cerradaPor Usuario? @relation("CajaCerradaPor", fields: [cerradaPorId], references: [id])
+
+  movimientos MovimientoCaja[]
+
+  @@index([estado])
+  @@index([fechaApertura])
+}
+
+enum TipoMovCaja {
+  INGRESO
+  EGRESO
+}
+
+enum CategoriaMovCaja {
+  VENTA_CONTADO
+  COBRO_CLIENTE
+  PAGO_PROVEEDOR
+  COMPRA_CONTADO
+  GASTO
+  RETIRO
+  DEPOSITO
+  OTRO
+}
+
+model MovimientoCaja {
+  id          String           @id @default(cuid())
+  cajaId      String
+  tipo        TipoMovCaja
+  categoria   CategoriaMovCaja
+  monto       Decimal          @db.Decimal(14, 2)
+  descripcion String
+  fecha       DateTime         @default(now())
+  usuarioId   String
+
+  origenTipo String?
+  origenId   String?
+
+  caja    CajaDiaria @relation(fields: [cajaId], references: [id])
+  usuario Usuario    @relation(fields: [usuarioId], references: [id])
+
+  @@index([cajaId])
+  @@index([fecha])
+}
+
+// ============================================================================
+// VENTAS
+// ============================================================================
+
+enum EstadoVenta {
+  PENDIENTE
+  CONFIRMADA
+  ANULADA
+}
+
+enum CondicionVenta {
+  CONTADO
+  CUENTA_CORRIENTE
+}
+
+model Venta {
+  id              String         @id @default(cuid())
+  numero          Int            @unique @default(autoincrement())
+  fecha           DateTime       @default(now())
+  clienteId       String
+  cuentaId        String
+  condicion       CondicionVenta
+  subtotal        Decimal        @db.Decimal(14, 2)
+  descuento       Decimal        @db.Decimal(14, 2) @default(0)
+  total           Decimal        @db.Decimal(14, 2)
+  estado          EstadoVenta    @default(CONFIRMADA)
+  observaciones   String?
+  creadaPorId     String
+  anuladaEn       DateTime?
+  motivoAnulacion String?
+
+  cliente   Cliente @relation(fields: [clienteId], references: [id])
+  cuenta    Cuenta  @relation(fields: [cuentaId], references: [id])
+  creadaPor Usuario @relation("VentaCreadaPor", fields: [creadaPorId], references: [id])
+
+  detalles DetalleVenta[]
+  remitos  Remito[]
+  facturas Factura[]
+
+  @@index([fecha])
+  @@index([clienteId])
+  @@index([estado])
+}
+
+model DetalleVenta {
+  id             String  @id @default(cuid())
+  ventaId        String
+  productoId     String
+  unidadId       String
+  cantidad       Decimal @db.Decimal(12, 3)
+  cantidadBase   Decimal @db.Decimal(12, 3)
+  precioUnitario Decimal @db.Decimal(12, 2)
+  subtotal       Decimal @db.Decimal(14, 2)
+
+  venta    Venta        @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  producto Producto     @relation(fields: [productoId], references: [id])
+  unidad   UnidadMedida @relation(fields: [unidadId], references: [id])
+
+  @@index([ventaId])
+  @@index([productoId])
+}
+
+// ============================================================================
+// COMPRAS
+// ============================================================================
+
+enum EstadoCompra {
+  PENDIENTE
+  RECIBIDA
+  ANULADA
+}
+
+enum CondicionCompra {
+  CONTADO
+  CUENTA_CORRIENTE
+}
+
+model Compra {
+  id                String          @id @default(cuid())
+  numeroComprobante String?
+  fecha             DateTime        @default(now())
+  proveedorId       String
+  condicion         CondicionCompra
+  subtotal          Decimal         @db.Decimal(14, 2)
+  descuento         Decimal         @db.Decimal(14, 2) @default(0)
+  total             Decimal         @db.Decimal(14, 2)
+  estado            EstadoCompra    @default(RECIBIDA)
+  observaciones     String?
+  creadaPorId       String
+  anuladaEn         DateTime?
+  motivoAnulacion   String?
+
+  proveedor Proveedor @relation(fields: [proveedorId], references: [id])
+  creadaPor Usuario   @relation("CompraCreadaPor", fields: [creadaPorId], references: [id])
+
+  detalles DetalleCompra[]
+
+  @@index([fecha])
+  @@index([proveedorId])
+  @@index([estado])
+}
+
+model DetalleCompra {
+  id             String  @id @default(cuid())
+  compraId       String
+  productoId     String
+  unidadId       String
+  cantidad       Decimal @db.Decimal(12, 3)
+  cantidadBase   Decimal @db.Decimal(12, 3)
+  precioUnitario Decimal @db.Decimal(12, 2)
+  subtotal       Decimal @db.Decimal(14, 2)
+
+  compra   Compra       @relation(fields: [compraId], references: [id], onDelete: Cascade)
+  producto Producto     @relation(fields: [productoId], references: [id])
+  unidad   UnidadMedida @relation(fields: [unidadId], references: [id])
+
+  @@index([compraId])
+  @@index([productoId])
+}
+
+// ============================================================================
+// REMITOS Y FACTURAS
+// ============================================================================
+
+model ParametrosComprobante {
+  id              String   @id @default(cuid())
+  puntoVenta      Int      @unique @default(1)
+  proximoRemito   Int      @default(1)
+  proximaFacturaA Int      @default(1)
+  proximaFacturaB Int      @default(1)
+  proximaFacturaC Int      @default(1)
+  updatedAt       DateTime @updatedAt
+}
+
+enum EstadoRemito {
+  EMITIDO
+  ANULADO
+}
+
+model Remito {
+  id              String       @id @default(cuid())
+  numero          String       @unique
+  puntoVenta      Int
+  fecha           DateTime     @default(now())
+  ventaId         String
+  estado          EstadoRemito @default(EMITIDO)
+  anuladoEn       DateTime?
+  motivoAnulacion String?
+
+  venta    Venta     @relation(fields: [ventaId], references: [id])
+  facturas Factura[]
+
+  @@index([ventaId])
+  @@index([fecha])
+}
+
+enum TipoFactura {
+  A
+  B
+  C
+  NOTA_CREDITO_A
+  NOTA_CREDITO_B
+  NOTA_CREDITO_C
+  NOTA_DEBITO_A
+  NOTA_DEBITO_B
+  NOTA_DEBITO_C
+}
+
+enum EstadoFactura {
+  EMITIDA
+  ANULADA
+  RECHAZADA_ARCA
+}
+
+model Factura {
+  id            String        @id @default(cuid())
+  numero        String        @unique
+  puntoVenta    Int
+  tipo          TipoFactura
+  fechaEmision  DateTime      @default(now())
+  ventaId       String
+  remitoId      String?
+  subtotal      Decimal       @db.Decimal(14, 2)
+  iva           Decimal       @db.Decimal(14, 2) @default(0)
+  total         Decimal       @db.Decimal(14, 2)
+  estado        EstadoFactura @default(EMITIDA)
+
+  cae            String?
+  caeVencimiento DateTime?
+  qrUrl          String?
+  arcaRespuesta  Json?
+
+  venta  Venta   @relation(fields: [ventaId], references: [id])
+  remito Remito? @relation(fields: [remitoId], references: [id])
+
+  @@index([ventaId])
+  @@index([fechaEmision])
+  @@index([cae])
+}
+
+// ============================================================================
+// PARÁMETROS GENERALES
+// ============================================================================
+
+model ParametrosNegocio {
+  id                    String       @id @default(cuid())
+  nombreFantasia        String
+  razonSocial           String
+  cuit                  String
+  condicionIva          CondicionIva
+  direccion             String
+  localidad             String
+  telefono              String?
+  email                 String?
+  logoUrl               String?
+  ingresosBrutos        String?
+  inicioActividades     DateTime?
+  facturacionHabilitada Boolean      @default(false)
+
+  updatedAt DateTime @updatedAt
+}
