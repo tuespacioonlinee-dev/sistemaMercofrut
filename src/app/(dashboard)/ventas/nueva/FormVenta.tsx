@@ -227,13 +227,14 @@ export function FormVenta({ clientes, productos, onSubmit }: Props) {
                   />
                 </div>
 
-                {/* Precio unitario */}
+                {/* Precio unitario (solo lectura, se toma del producto) */}
                 <div className="space-y-1">
                   <Input
                     type="number"
                     step="0.01"
                     min="0"
-                    className="h-8 text-sm"
+                    readOnly
+                    className="h-8 text-sm bg-muted/60 cursor-not-allowed select-none"
                     {...register(`detalles.${index}.precioUnitario`, { valueAsNumber: true })}
                   />
                   {subtotalItem > 0 && (

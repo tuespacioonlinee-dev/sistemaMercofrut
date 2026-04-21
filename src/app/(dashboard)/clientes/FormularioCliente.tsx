@@ -1,5 +1,6 @@
 "use client"
 
+import React from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -40,6 +41,7 @@ export function FormularioCliente({ valoresIniciales, onSubmit, modoEdicion = fa
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<DatosCliente>({
     resolver: zodResolver(esquemaCliente),
@@ -49,6 +51,18 @@ export function FormularioCliente({ valoresIniciales, onSubmit, modoEdicion = fa
       ...valoresIniciales,
     },
   })
+
+  const tipoDocumento = watch("tipoDocumento")
+
+  // Restricciones por tipo de documento
+  const docConfig: Record<string, { maxLength: number; inputMode: React.HTMLAttributes<HTMLInputElement>["inputMode"]; placeholder: string }> = {
+    DNI:       { maxLength: 8,  inputMode: "numeric", placeholder: "Ej: 30123456" },
+    CUIT:      { maxLength: 13, inputMode: "numeric", placeholder: "Ej: 20-30123456-7" },
+    CUIL:      { maxLength: 13, inputMode: "numeric", placeholder: "Ej: 27-30123456-3" },
+    PASAPORTE: { maxLength: 9,  inputMode: "text",    placeholder: "Ej: AAB123456" },
+    OTRO:      { maxLength: 20, inputMode: "text",    placeholder: "Número de documento" },
+  }
+  const docCfg = docConfig[tipoDocumento] ?? docConfig.OTRO
 
   async function procesarEnvio(data: DatosCliente) {
     setGuardando(true)
@@ -99,7 +113,9 @@ export function FormularioCliente({ valoresIniciales, onSubmit, modoEdicion = fa
             <Label htmlFor="documento">Número de documento *</Label>
             <Input
               id="documento"
-              placeholder="Ej: 20-12345678-3"
+              placeholder={docCfg.placeholder}
+              maxLength={docCfg.maxLength}
+              inputMode={docCfg.inputMode}
               {...register("documento")}
             />
             {errors.documento && (
