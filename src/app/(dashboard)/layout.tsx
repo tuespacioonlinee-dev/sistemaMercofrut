@@ -17,6 +17,7 @@ import {
   Tag,
   Ruler,
   UserCog,
+  Boxes,
 } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
 
@@ -53,6 +54,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <p className="px-3 pb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             Stock y compras
           </p>
+          <NavLink href="/stock" icon={<Boxes />}>Stock</NavLink>
           <NavLink href="/productos" icon={<Package />}>Productos</NavLink>
           <NavLink href="/categorias" icon={<Tag />}>Categorías</NavLink>
           <NavLink href="/unidades" icon={<Ruler />}>Unidades</NavLink>
