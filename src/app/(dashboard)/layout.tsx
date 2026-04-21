@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { NavLink } from "@/components/shared/NavLink"
+import { LogoutButton } from "@/components/shared/LogoutButton"
 import {
   Users,
   ShoppingCart,
@@ -61,13 +62,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <Separator className="my-3" />
 
           <NavLink href="/parametros" icon={<Settings />}>Parámetros</NavLink>
-          <NavLink href="/usuarios" icon={<UserCog />} deshabilitado>Usuarios</NavLink>
+          <NavLink href="/usuarios" icon={<UserCog />}>Usuarios</NavLink>
         </nav>
 
         {/* Usuario */}
         <div className="px-4 py-3 border-t text-xs text-muted-foreground">
           <p className="font-medium text-foreground">{session.user.name}</p>
           <p className="truncate">{session.user.email}</p>
+          <LogoutButton />
         </div>
       </aside>
 
