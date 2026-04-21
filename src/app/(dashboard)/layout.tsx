@@ -51,7 +51,7 @@ export default function DashboardLayout({
           <NavLink href="/caja" icon={<Wallet />} deshabilitado>
             Caja diaria
           </NavLink>
-          <NavLink href="/cuentas" icon={<CreditCard />} deshabilitado>
+          <NavLink href="/cuentas" icon={<CreditCard />}>
             Cuentas corrientes
           </NavLink>
           <NavLink href="/reportes" icon={<BarChart2 />} deshabilitado>
@@ -77,7 +77,7 @@ export default function DashboardLayout({
 
           <Separator className="my-3" />
 
-          <NavLink href="/parametros" icon={<Settings />} deshabilitado>
+          <NavLink href="/parametros" icon={<Settings />}>
             Parámetros
           </NavLink>
         </nav>
