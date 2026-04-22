@@ -446,16 +446,29 @@ enum CondicionCompra {
   CUENTA_CORRIENTE
 }
 
+enum TipoComprobanteCompra {
+  FACTURA_A
+  FACTURA_B
+  FACTURA_C
+  FACTURA_E
+  REMITO
+  TICKET
+  OTRO
+}
+
 model Compra {
-  id                String          @id @default(cuid())
+  id                String                 @id @default(cuid())
   numeroComprobante String?
-  fecha             DateTime        @default(now())
+  tipoComprobante   TipoComprobanteCompra?
+  puntoVenta        Int?
+  fecha             DateTime               @default(now())
   proveedorId       String
   condicion         CondicionCompra
-  subtotal          Decimal         @db.Decimal(14, 2)
-  descuento         Decimal         @db.Decimal(14, 2) @default(0)
-  total             Decimal         @db.Decimal(14, 2)
-  estado            EstadoCompra    @default(RECIBIDA)
+  subtotal          Decimal                @db.Decimal(14, 2)
+  iva               Decimal                @db.Decimal(14, 2) @default(0)
+  descuento         Decimal                @db.Decimal(14, 2) @default(0)
+  total             Decimal                @db.Decimal(14, 2)
+  estado            EstadoCompra           @default(RECIBIDA)
   observaciones     String?
   creadaPorId       String
   anuladaEn         DateTime?

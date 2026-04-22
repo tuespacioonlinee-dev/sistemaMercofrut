@@ -35,28 +35,34 @@ Devolvé ÚNICAMENTE un objeto JSON válido, sin texto adicional, con esta estru
     "nombre": "nombre completo o razón social",
     "cuit": "XX-XXXXXXXX-X o null si no se ve"
   },
-  "comprobante": "número de comprobante (ej: 0001-00004521) o null",
+  "tipoComprobante": "uno de: FACTURA_A, FACTURA_B, FACTURA_C, FACTURA_E, REMITO, TICKET, OTRO — o null si no podés determinar",
+  "comprobante": "número completo (ej: 0001-00004521) o null",
   "fecha": "YYYY-MM-DD o null",
   "condicion": "CONTADO o CUENTA_CORRIENTE (inferí del contexto, default CONTADO)",
+  "iva": número del monto total de IVA discriminado que figura en la factura (solo en Factura A), o 0,
   "items": [
     {
       "descripcion": "texto exacto tal como aparece en la factura",
       "productoIdSugerido": "id del producto más parecido del sistema, o null si no encontrás match",
       "cantidad": número,
       "unidad": "kg, u, caja, etc.",
-      "precioUnitario": número sin símbolo de moneda,
+      "precioUnitario": número sin IVA (precio neto unitario), sin símbolo de moneda,
       "subtotal": número sin símbolo de moneda
     }
   ],
   "descuento": número o 0,
-  "total": número sin símbolo de moneda
+  "total": número total final de la factura, sin símbolo de moneda
 }
 
-Reglas importantes:
-- Los precios son en pesos argentinos, sin símbolo.
+Reglas importantes para facturas argentinas:
+- Factura A: la emite un Responsable Inscripto a otro RI. El IVA aparece DISCRIMINADO al final. Los precios de los ítems son NETOS (sin IVA). Extraé el monto total de IVA en el campo "iva".
+- Factura B: emitida a consumidor final o monotributista. IVA incluido en precio, NO discriminado. "iva" = 0.
+- Factura C: emitida por monotributista. Sin IVA. "iva" = 0.
+- Remito: documento de entrega sin valor fiscal. "iva" = 0.
+- El tipo suele aparecer claramente en el encabezado: "FACTURA A", "Fact. B", una gran letra en el centro, etc.
+- Los precios son en pesos argentinos, sin símbolo de moneda en el JSON.
 - Si un campo no se puede leer claramente, usá null.
-- Para el match de productos, buscá similitud en el nombre ignorando mayúsculas/minúsculas.
-- Si hay varios ítems similares en la factura, creá una entrada por cada uno.
+- Para el match de productos, buscá similitud en el nombre ignorando mayúsculas/minúsculas y abreviaciones.
 - No inventes datos que no estén en la imagen.`
 
     const response = await client.messages.create({

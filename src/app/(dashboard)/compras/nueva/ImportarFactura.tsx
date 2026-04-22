@@ -23,13 +23,15 @@ interface ExtractedItem {
 }
 
 interface ExtractedData {
-  proveedor:    { nombre: string; cuit: string | null }
-  comprobante:  string | null
-  fecha:        string | null
-  condicion:    "CONTADO" | "CUENTA_CORRIENTE" | null
-  items:        ExtractedItem[]
-  descuento:    number
-  total:        number
+  proveedor:       { nombre: string; cuit: string | null }
+  tipoComprobante: string | null   // "FACTURA_A" | "FACTURA_B" | "FACTURA_C" | "REMITO" | etc.
+  comprobante:     string | null
+  fecha:           string | null
+  condicion:       "CONTADO" | "CUENTA_CORRIENTE" | null
+  iva:             number
+  items:           ExtractedItem[]
+  descuento:       number
+  total:           number
 }
 
 interface ReviewItem {
@@ -42,7 +44,9 @@ interface ReviewItem {
 export interface DatosImportados {
   proveedorId:       string
   condicion:         "CONTADO" | "CUENTA_CORRIENTE"
+  tipoComprobante:   string | null
   numeroComprobante: string
+  iva:               number
   descuento:         number
   detalles: Array<{
     productoId:     string
@@ -93,6 +97,7 @@ export function ImportarFactura({ proveedores, productos, onAplicar }: Props) {
   const [proveedorId, setProveedorId] = useState("")
   const [condicion, setCondicion]     = useState<"CONTADO" | "CUENTA_CORRIENTE">("CONTADO")
   const [comprobante, setComprobante] = useState("")
+  const [iva, setIva]                 = useState(0)
   const [descuento, setDescuento]     = useState(0)
   const [items, setItems]             = useState<ReviewItem[]>([])
 
@@ -122,6 +127,7 @@ export function ImportarFactura({ proveedores, productos, onAplicar }: Props) {
       setProveedorId(matchProveedor(datos.proveedor, proveedores))
       setCondicion(datos.condicion ?? "CONTADO")
       setComprobante(datos.comprobante ?? "")
+      setIva(datos.iva ?? 0)
       setDescuento(datos.descuento ?? 0)
       setItems(
         datos.items.map((it) => ({
@@ -161,7 +167,9 @@ export function ImportarFactura({ proveedores, productos, onAplicar }: Props) {
     onAplicar({
       proveedorId,
       condicion,
+      tipoComprobante: extraido?.tipoComprobante ?? null,
       numeroComprobante: comprobante,
+      iva,
       descuento,
       detalles: detallesValidos.map((it) => {
         const prod = productos.find((p) => p.id === it.productoIdSeleccionado)!
@@ -280,6 +288,23 @@ export function ImportarFactura({ proveedores, productos, onAplicar }: Props) {
             value={comprobante}
             onChange={(e) => setComprobante(e.target.value)}
             placeholder="0001-00000000"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-xs">
+            IVA ($)
+            {extraido?.tipoComprobante === "FACTURA_A" && (
+              <span className="ml-1 text-blue-600 font-normal">(Factura A)</span>
+            )}
+          </Label>
+          <Input
+            className="h-8 text-sm"
+            type="number"
+            min="0"
+            step="0.01"
+            value={iva}
+            onChange={(e) => setIva(Number(e.target.value))}
           />
         </div>
 
