@@ -8,7 +8,8 @@ import { toast } from "sonner"
 import { Plus, Trash2, CalendarClock } from "lucide-react"
 import type { UnidadMedida } from "@prisma/client"
 import { CondicionCompra } from "@prisma/client"
-import { compraSchema, type CompraInput } from "@/lib/validaciones/compras"
+import { compraSchema, type CompraInput, etiquetasTipoComprobante } from "@/lib/validaciones/compras"
+import { TipoComprobanteCompra } from "@prisma/client"
 import { crearCompra } from "@/server/actions/compras"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -58,6 +59,7 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
     defaultValues: {
       condicion: CondicionCompra.CONTADO,
       descuento: 0,
+      iva: 0,
       detalles: [{ productoId: "", unidadId: "", cantidad: 0, precioUnitario: 0, numeroLote: "", fechaVencimiento: "" }],
     },
   })
@@ -65,18 +67,24 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
   const { fields, append, remove, replace } = useFieldArray({ control, name: "detalles" })
   const detalles = watch("detalles")
 
+  const tipoComprobante = watch("tipoComprobante")
+  const esFacturaA = tipoComprobante === TipoComprobanteCompra.FACTURA_A
+
   const subtotal = detalles.reduce(
     (acc, d) => acc + (Number(d.cantidad) || 0) * (Number(d.precioUnitario) || 0),
     0
   )
+  const iva      = esFacturaA ? (Number(watch("iva")) || 0) : 0
   const descuento = Number(watch("descuento")) || 0
-  const total = subtotal - descuento
+  const total = subtotal + iva - descuento
 
   // ── Aplicar datos importados desde IA ──────────────────────────────────────
   function handleImportar(datos: DatosImportados) {
     setValue("proveedorId", datos.proveedorId)
     setValue("condicion", datos.condicion)
+    if (datos.tipoComprobante) setValue("tipoComprobante", datos.tipoComprobante as TipoComprobanteCompra)
     setValue("numeroComprobante", datos.numeroComprobante)
+    setValue("iva", datos.iva ?? 0)
     setValue("descuento", datos.descuento)
     replace(
       datos.detalles.map((d) => ({
@@ -140,9 +148,43 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="numeroComprobante">N° Comprobante (opcional)</Label>
+              <Label htmlFor="tipoComprobante">Tipo de comprobante</Label>
+              <select id="tipoComprobante" className={selectCls} {...register("tipoComprobante")}>
+                <option value="">— seleccioná —</option>
+                {Object.entries(etiquetasTipoComprobante).map(([val, label]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="numeroComprobante">N° Comprobante</Label>
               <Input id="numeroComprobante" placeholder="ej: 0001-00002345" {...register("numeroComprobante")} />
             </div>
+
+            {/* IVA — solo visible cuando es Factura A */}
+            {esFacturaA && (
+              <div className="space-y-1 col-span-1 sm:col-span-2">
+                <Label htmlFor="iva" className="flex items-center gap-2">
+                  IVA discriminado
+                  <span className="text-xs font-normal text-blue-600 bg-blue-50 rounded px-1.5 py-0.5">
+                    Factura A — crédito fiscal
+                  </span>
+                </Label>
+                <Input
+                  id="iva"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="max-w-[180px]"
+                  placeholder="0.00"
+                  {...register("iva", { valueAsNumber: true })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Ingresá el monto de IVA que figura en la factura. Se suma al total.
+                </p>
+              </div>
+            )}
 
             <div className="space-y-1">
               <Label htmlFor="observaciones">Observaciones</Label>
@@ -292,9 +334,15 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
           <CardContent className="pt-6">
             <div className="flex flex-col items-end gap-2 text-sm">
               <div className="flex gap-8">
-                <span className="text-slate-500">Subtotal</span>
+                <span className="text-slate-500">Subtotal (neto)</span>
                 <span className="font-medium w-32 text-right">{$ar(subtotal)}</span>
               </div>
+              {esFacturaA && iva > 0 && (
+                <div className="flex gap-8">
+                  <span className="text-blue-600">IVA</span>
+                  <span className="font-medium w-32 text-right text-blue-600">{$ar(iva)}</span>
+                </div>
+              )}
               <div className="flex items-center gap-8">
                 <span className="text-slate-500">Descuento</span>
                 <Input

@@ -12,7 +12,7 @@ export async function crearCompra(data: unknown) {
   const parsed = compraSchema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
 
-  const { detalles, descuento, ...cabecera } = parsed.data
+  const { detalles, descuento, iva, ...cabecera } = parsed.data
 
   // Resolver factores de conversión y calcular totales
   const unidadesIds = [...new Set(detalles.map((d) => d.unidadId))]
@@ -40,7 +40,7 @@ export async function crearCompra(data: unknown) {
   })
 
   const subtotal = detallesConBase.reduce((acc, d) => acc + d.subtotal, 0)
-  const total = subtotal - descuento
+  const total = subtotal + (iva ?? 0) - descuento
 
   await prisma.$transaction(async (tx) => {
     // 1. Crear la compra con sus detalles
@@ -50,6 +50,7 @@ export async function crearCompra(data: unknown) {
         numeroComprobante: cabecera.numeroComprobante || null,
         observaciones: cabecera.observaciones || null,
         descuento,
+        iva: iva ?? 0,
         subtotal,
         total,
         creadaPorId: session.user.id,
