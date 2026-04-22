@@ -6,10 +6,20 @@ import { AlertTriangle } from "lucide-react"
 export const dynamic = "force-dynamic"
 
 export default async function StockPage() {
-  const productos = await obtenerStockActual()
+  const productosRaw = await obtenerStockActual()
+
+  const productos = productosRaw.map((p) => ({
+    ...p,
+    stockTotal: Number(p.stockTotal),
+    stockMinimo: Number(p.stockMinimo),
+    lotes: p.lotes.map((l) => ({
+      ...l,
+      cantidadActual: Number(l.cantidadActual),
+    })),
+  }))
 
   const bajosDeStock = productos.filter(
-    (p) => Number(p.stockTotal) <= Number(p.stockMinimo) && Number(p.stockMinimo) > 0
+    (p) => p.stockTotal <= p.stockMinimo && p.stockMinimo > 0
   )
 
   const categorias = [...new Set(productos.map((p) => p.categoria.nombre))].sort()
