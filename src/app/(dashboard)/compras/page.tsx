@@ -22,6 +22,7 @@ export default async function ComprasPage() {
     ...c,
     subtotal: Number(c.subtotal),
     descuento: Number(c.descuento),
+    iva: Number(c.iva),
     total: Number(c.total),
   }))
 
