@@ -3,12 +3,18 @@
 import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useTransition } from "react"
+import { useTransition, useState, useEffect } from "react"
 import { toast } from "sonner"
 import { Plus, Trash2, CalendarClock } from "lucide-react"
 import type { UnidadMedida } from "@prisma/client"
 import { CondicionCompra } from "@prisma/client"
-import { compraSchema, type CompraInput, etiquetasTipoComprobante } from "@/lib/validaciones/compras"
+import {
+  compraSchema,
+  type CompraInput,
+  etiquetasTipoComprobante,
+  ALICUOTAS_IVA,
+  type AlicuotaIVA,
+} from "@/lib/validaciones/compras"
 import { TipoComprobanteCompra } from "@prisma/client"
 import { crearCompra } from "@/server/actions/compras"
 import { Button } from "@/components/ui/button"
@@ -16,6 +22,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
+import { formatearPesos } from "@/lib/utils"
 import { ImportarFactura, type DatosImportados } from "./ImportarFactura"
 
 type Proveedor = { id: string; nombreRazonSocial: string; cuit?: string | null }
@@ -46,6 +53,7 @@ const $ar = (n: number) =>
 export function FormCompra({ proveedores, productos, unidades }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [ivaAlicuota, setIvaAlicuota] = useState<AlicuotaIVA>(0)
 
   const {
     register,
@@ -67,16 +75,20 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
   const { fields, append, remove, replace } = useFieldArray({ control, name: "detalles" })
   const detalles = watch("detalles")
 
-  const tipoComprobante = watch("tipoComprobante")
-  const esFacturaA = tipoComprobante === TipoComprobanteCompra.FACTURA_A
-
-  const subtotal = detalles.reduce(
+  const subtotal  = detalles.reduce(
     (acc, d) => acc + (Number(d.cantidad) || 0) * (Number(d.precioUnitario) || 0),
     0
   )
-  const iva      = esFacturaA ? (Number(watch("iva")) || 0) : 0
   const descuento = Number(watch("descuento")) || 0
-  const total = subtotal + iva - descuento
+
+  // Calcular monto de IVA desde la alícuota seleccionada
+  const ivaMonto = Math.round(subtotal * ivaAlicuota) / 100
+  const total    = subtotal + ivaMonto - descuento
+
+  // Sincronizar el campo "iva" del formulario con el monto calculado
+  useEffect(() => {
+    setValue("iva", ivaMonto)
+  }, [ivaMonto, setValue])
 
   // ── Aplicar datos importados desde IA ──────────────────────────────────────
   function handleImportar(datos: DatosImportados) {
@@ -84,8 +96,8 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
     setValue("condicion", datos.condicion)
     if (datos.tipoComprobante) setValue("tipoComprobante", datos.tipoComprobante as TipoComprobanteCompra)
     setValue("numeroComprobante", datos.numeroComprobante)
-    setValue("iva", datos.iva ?? 0)
     setValue("descuento", datos.descuento)
+    setIvaAlicuota(datos.ivaAlicuota)   // el useEffect sincroniza el monto
     replace(
       datos.detalles.map((d) => ({
         productoId: d.productoId,
@@ -162,29 +174,25 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
               <Input id="numeroComprobante" placeholder="ej: 0001-00002345" {...register("numeroComprobante")} />
             </div>
 
-            {/* IVA — solo visible cuando es Factura A */}
-            {esFacturaA && (
-              <div className="space-y-1 col-span-1 sm:col-span-2">
-                <Label htmlFor="iva" className="flex items-center gap-2">
-                  IVA discriminado
-                  <span className="text-xs font-normal text-blue-600 bg-blue-50 rounded px-1.5 py-0.5">
-                    Factura A — crédito fiscal
-                  </span>
-                </Label>
-                <Input
-                  id="iva"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  className="max-w-[180px]"
-                  placeholder="0.00"
-                  {...register("iva", { valueAsNumber: true })}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Ingresá el monto de IVA que figura en la factura. Se suma al total.
+            {/* IVA — alícuota ARCA */}
+            <div className="space-y-1">
+              <Label htmlFor="ivaAlicuota">Alícuota IVA</Label>
+              <select
+                id="ivaAlicuota"
+                className={selectCls}
+                value={ivaAlicuota}
+                onChange={(e) => setIvaAlicuota(Number(e.target.value) as AlicuotaIVA)}
+              >
+                {ALICUOTAS_IVA.map((a) => (
+                  <option key={a.valor} value={a.valor}>{a.label}</option>
+                ))}
+              </select>
+              {ivaAlicuota > 0 && (
+                <p className="text-xs text-blue-600">
+                  IVA calculado: {formatearPesos(ivaMonto)}
                 </p>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="space-y-1">
               <Label htmlFor="observaciones">Observaciones</Label>
@@ -337,10 +345,10 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
                 <span className="text-slate-500">Subtotal (neto)</span>
                 <span className="font-medium w-32 text-right">{$ar(subtotal)}</span>
               </div>
-              {esFacturaA && iva > 0 && (
+              {ivaMonto > 0 && (
                 <div className="flex gap-8">
-                  <span className="text-blue-600">IVA</span>
-                  <span className="font-medium w-32 text-right text-blue-600">{$ar(iva)}</span>
+                  <span className="text-blue-600">IVA ({ivaAlicuota}%)</span>
+                  <span className="font-medium w-32 text-right text-blue-600">{$ar(ivaMonto)}</span>
                 </div>
               )}
               <div className="flex items-center gap-8">
