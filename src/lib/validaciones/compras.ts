@@ -1,6 +1,29 @@
 import { z } from "zod"
 import { CondicionCompra, TipoComprobanteCompra } from "@prisma/client"
 
+// Alícuotas de IVA vigentes según ARCA (ex-AFIP)
+export const ALICUOTAS_IVA = [
+  { valor: 0,    label: "0% — Exento / No gravado" },
+  { valor: 2.5,  label: "2,5% — Tasa especial" },
+  { valor: 5,    label: "5% — Tasa reducida" },
+  { valor: 10.5, label: "10,5% — Tasa diferencial" },
+  { valor: 21,   label: "21% — Tasa general" },
+  { valor: 27,   label: "27% — Tasa incrementada" },
+] as const
+
+export type AlicuotaIVA = (typeof ALICUOTAS_IVA)[number]["valor"]
+
+/** Dado un monto de IVA y un subtotal, devuelve la alícuota ARCA más cercana */
+export function detectarAlicuota(ivaAmount: number, subtotal: number): AlicuotaIVA {
+  if (subtotal <= 0 || ivaAmount <= 0) return 0
+  const pct = (ivaAmount / subtotal) * 100
+  let closest: (typeof ALICUOTAS_IVA)[number] = ALICUOTAS_IVA[0]
+  for (const a of ALICUOTAS_IVA) {
+    if (Math.abs(a.valor - pct) < Math.abs(closest.valor - pct)) closest = a
+  }
+  return closest.valor
+}
+
 export const detalleCompraSchema = z.object({
   productoId: z.string().min(1, "Seleccioná un producto"),
   unidadId: z.string().min(1, "Seleccioná una unidad"),

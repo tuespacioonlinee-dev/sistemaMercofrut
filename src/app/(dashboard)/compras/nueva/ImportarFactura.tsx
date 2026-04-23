@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { ALICUOTAS_IVA, detectarAlicuota, type AlicuotaIVA } from "@/lib/validaciones/compras"
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -46,7 +47,7 @@ export interface DatosImportados {
   condicion:         "CONTADO" | "CUENTA_CORRIENTE"
   tipoComprobante:   string | null
   numeroComprobante: string
-  iva:               number
+  ivaAlicuota:       AlicuotaIVA  // porcentaje (0, 10.5, 21, 27…)
   descuento:         number
   detalles: Array<{
     productoId:     string
@@ -94,12 +95,12 @@ export function ImportarFactura({ proveedores, productos, onAplicar }: Props) {
   const inputRef                      = useRef<HTMLInputElement>(null)
   const [estado, setEstado]           = useState<"idle" | "cargando" | "revision">("idle")
   const [extraido, setExtraido]       = useState<ExtractedData | null>(null)
-  const [proveedorId, setProveedorId] = useState("")
-  const [condicion, setCondicion]     = useState<"CONTADO" | "CUENTA_CORRIENTE">("CONTADO")
-  const [comprobante, setComprobante] = useState("")
-  const [iva, setIva]                 = useState(0)
-  const [descuento, setDescuento]     = useState(0)
-  const [items, setItems]             = useState<ReviewItem[]>([])
+  const [proveedorId, setProveedorId]     = useState("")
+  const [condicion, setCondicion]         = useState<"CONTADO" | "CUENTA_CORRIENTE">("CONTADO")
+  const [comprobante, setComprobante]     = useState("")
+  const [ivaAlicuota, setIvaAlicuota]    = useState<AlicuotaIVA>(0)
+  const [descuento, setDescuento]         = useState(0)
+  const [items, setItems]                 = useState<ReviewItem[]>([])
 
   // ── Procesar imagen ──────────────────────────────────────────────────────
 
@@ -127,8 +128,13 @@ export function ImportarFactura({ proveedores, productos, onAplicar }: Props) {
       setProveedorId(matchProveedor(datos.proveedor, proveedores))
       setCondicion(datos.condicion ?? "CONTADO")
       setComprobante(datos.comprobante ?? "")
-      setIva(datos.iva ?? 0)
       setDescuento(datos.descuento ?? 0)
+
+      // Detectar alícuota ARCA más cercana al monto de IVA extraído
+      const subtotalExtraido = datos.items.reduce(
+        (acc, it) => acc + it.cantidad * it.precioUnitario, 0
+      )
+      setIvaAlicuota(detectarAlicuota(datos.iva ?? 0, subtotalExtraido))
       setItems(
         datos.items.map((it) => ({
           descripcion:            it.descripcion,
@@ -169,7 +175,7 @@ export function ImportarFactura({ proveedores, productos, onAplicar }: Props) {
       condicion,
       tipoComprobante: extraido?.tipoComprobante ?? null,
       numeroComprobante: comprobante,
-      iva,
+      ivaAlicuota,
       descuento,
       detalles: detallesValidos.map((it) => {
         const prod = productos.find((p) => p.id === it.productoIdSeleccionado)!
@@ -292,20 +298,16 @@ export function ImportarFactura({ proveedores, productos, onAplicar }: Props) {
         </div>
 
         <div className="space-y-1">
-          <Label className="text-xs">
-            IVA ($)
-            {extraido?.tipoComprobante === "FACTURA_A" && (
-              <span className="ml-1 text-blue-600 font-normal">(Factura A)</span>
-            )}
-          </Label>
-          <Input
-            className="h-8 text-sm"
-            type="number"
-            min="0"
-            step="0.01"
-            value={iva}
-            onChange={(e) => setIva(Number(e.target.value))}
-          />
+          <Label className="text-xs">Alícuota IVA</Label>
+          <select
+            className={selectCls}
+            value={ivaAlicuota}
+            onChange={(e) => setIvaAlicuota(Number(e.target.value) as AlicuotaIVA)}
+          >
+            {ALICUOTAS_IVA.map((a) => (
+              <option key={a.valor} value={a.valor}>{a.label}</option>
+            ))}
+          </select>
         </div>
 
         <div className="space-y-1">
