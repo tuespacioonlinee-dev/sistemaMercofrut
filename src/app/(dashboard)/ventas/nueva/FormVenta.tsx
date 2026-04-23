@@ -1,11 +1,12 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useForm, useFieldArray, Controller } from "react-hook-form"
+import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
-import { PlusCircle, Trash2 } from "lucide-react"
+import { PlusCircle, Trash2, AlertTriangle } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
 
 import { ventaSchema, VentaInput } from "@/lib/validaciones/ventas"
 import { Button } from "@/components/ui/button"
@@ -14,26 +15,35 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { formatearPesos, cn } from "@/lib/utils"
 
-// Tipos mínimos de los datos que recibe el formulario
+// ─── Tipos mínimos de los datos que recibe el formulario ─────────────────────
+
 interface Cliente { id: string; nombreRazonSocial: string; documento: string }
-interface Unidad { id: string; nombre: string; abreviatura: string }
+interface Unidad  { id: string; nombre: string; abreviatura: string }
 interface ProductoUnidadAlternativa { unidadId: string; factor: unknown; unidad: Unidad }
 interface Producto {
   id: string
   nombre: string
   codigo: string
-  precioVenta: number | string | { toString(): string }
-  stockTotal: number | string | { toString(): string }
+  precioVenta: number
+  stockTotal:  number
   unidadBase: Unidad
   unidadesAlternativas: ProductoUnidadAlternativa[]
 }
 
 interface Props {
-  clientes: Cliente[]
+  clientes:  Cliente[]
   productos: Producto[]
-  unidades: Unidad[]
-  onSubmit: (data: VentaInput) => Promise<{ ok?: boolean; error?: string; id?: string }>
+  unidades:  Unidad[]
+  onSubmit:  (data: VentaInput) => Promise<{
+    ok?:           boolean
+    error?:        string
+    ventaId?:      string
+    remitoId?:     string
+    remitoNumero?: string
+  }>
 }
+
+// ─── Helpers de estilo ────────────────────────────────────────────────────────
 
 const selectClasses = cn(
   "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm",
@@ -41,9 +51,20 @@ const selectClasses = cn(
   "disabled:opacity-50"
 )
 
+// ─── Componente ───────────────────────────────────────────────────────────────
+
 export function FormVenta({ clientes, productos, onSubmit }: Props) {
-  const router = useRouter()
+  const router    = useRouter()
   const [guardando, setGuardando] = useState(false)
+
+  // Stock en tiempo real — se refresca cada 30 s automáticamente
+  const { data: stockActual } = useQuery<Record<string, number>>({
+    queryKey: ["stock"],
+    queryFn:  () => fetch("/api/stock").then((r) => r.json()),
+    initialData: Object.fromEntries(productos.map((p) => [p.id, p.stockTotal])),
+    refetchInterval: 30_000, // 30 segundos
+    staleTime:        10_000, // 10 segundos
+  })
 
   const {
     register,
@@ -62,12 +83,12 @@ export function FormVenta({ clientes, productos, onSubmit }: Props) {
   })
 
   const { fields, append, remove } = useFieldArray({ control, name: "detalles" })
-  const detalles = watch("detalles")
+  const detalles  = watch("detalles")
   const descuento = watch("descuento") ?? 0
 
   // Calcular totales en tiempo real
   const subtotal = detalles.reduce((acc, d) => {
-    const cant = Number(d.cantidad) || 0
+    const cant  = Number(d.cantidad)  || 0
     const precio = Number(d.precioUnitario) || 0
     return acc + cant * precio
   }, 0)
@@ -85,15 +106,13 @@ export function FormVenta({ clientes, productos, onSubmit }: Props) {
   function getUnidadesProducto(productoId: string): Unidad[] {
     const producto = productos.find((p) => p.id === productoId)
     if (!producto) return []
-    const base = producto.unidadBase
-    const alternativas = producto.unidadesAlternativas.map((u) => u.unidad)
-    return [base, ...alternativas]
+    return [producto.unidadBase, ...producto.unidadesAlternativas.map((u) => u.unidad)]
   }
 
-  async function procesarEnvio(data: Record<string, unknown>) {
-    const ventaData = data as VentaInput
+  // ── Enviar formulario ──────────────────────────────────────────────────────
+  async function procesarEnvio(data: VentaInput) {
     setGuardando(true)
-    const resultado = await onSubmit(ventaData)
+    const resultado = await onSubmit(data)
     setGuardando(false)
 
     if (resultado.error) {
@@ -101,13 +120,23 @@ export function FormVenta({ clientes, productos, onSubmit }: Props) {
       return
     }
 
-    toast.success("Venta registrada correctamente.")
-    router.push(resultado.id ? `/ventas/${resultado.id}` : "/ventas")
+    toast.success(
+      resultado.remitoNumero
+        ? `Venta registrada. Remito ${resultado.remitoNumero} generado.`
+        : "Venta registrada correctamente."
+    )
+
+    // CAMBIO 2: redirigir a la vista del remito para imprimir/descargar
+    if (resultado.remitoId) {
+      router.push(`/remitos/${resultado.remitoId}`)
+    } else {
+      router.push("/ventas")
+    }
   }
 
   return (
     <form onSubmit={handleSubmit(procesarEnvio)} className="space-y-6">
-      {/* Datos generales */}
+      {/* ── Datos generales ─────────────────────────────────────────────── */}
       <div className="space-y-4">
         <h2 className="text-base font-semibold">Datos de la venta</h2>
         <div className="grid grid-cols-2 gap-4">
@@ -121,7 +150,9 @@ export function FormVenta({ clientes, productos, onSubmit }: Props) {
                 </option>
               ))}
             </select>
-            {errors.clienteId && <p className="text-sm text-destructive">{errors.clienteId.message}</p>}
+            {errors.clienteId && (
+              <p className="text-sm text-destructive">{errors.clienteId.message}</p>
+            )}
           </div>
 
           <div className="space-y-1">
@@ -135,13 +166,17 @@ export function FormVenta({ clientes, productos, onSubmit }: Props) {
 
         <div className="space-y-1">
           <Label htmlFor="observaciones">Observaciones</Label>
-          <Input id="observaciones" placeholder="Notas sobre esta venta..." {...register("observaciones")} />
+          <Input
+            id="observaciones"
+            placeholder="Notas sobre esta venta..."
+            {...register("observaciones")}
+          />
         </div>
       </div>
 
       <Separator />
 
-      {/* Ítems */}
+      {/* ── Ítems ───────────────────────────────────────────────────────── */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold">Productos</h2>
@@ -172,89 +207,120 @@ export function FormVenta({ clientes, productos, onSubmit }: Props) {
 
           {fields.map((field, index) => {
             const productoId = watch(`detalles.${index}.productoId`)
-            const unidades = getUnidadesProducto(productoId)
-            const producto = productos.find((p) => p.id === productoId)
-            const cant = Number(watch(`detalles.${index}.cantidad`)) || 0
-            const precio = Number(watch(`detalles.${index}.precioUnitario`)) || 0
-            const subtotalItem = cant * precio
+            const cantidad   = Number(watch(`detalles.${index}.cantidad`)) || 0
+            const precio     = Number(watch(`detalles.${index}.precioUnitario`)) || 0
+            const unidades   = getUnidadesProducto(productoId)
+            const subtotalItem = cantidad * precio
+
+            // CAMBIO 3: stock en tiempo real con advertencia ámbar
+            const stockDisponible = productoId ? (stockActual?.[productoId] ?? null) : null
+            const sinStock        = stockDisponible !== null && stockDisponible === 0
+            const stockExcedido   = stockDisponible !== null && cantidad > stockDisponible
 
             return (
-              <div key={field.id} className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] gap-2 items-start">
-                {/* Producto */}
-                <div className="space-y-1">
-                  <select
-                    className={selectClasses}
-                    {...register(`detalles.${index}.productoId`)}
-                    onChange={(e) => {
-                      register(`detalles.${index}.productoId`).onChange(e)
-                      onProductoChange(index, e.target.value)
-                    }}
+              <div key={field.id} className="space-y-1">
+                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] gap-2 items-start">
+                  {/* Producto */}
+                  <div className="space-y-1">
+                    <select
+                      className={selectClasses}
+                      {...register(`detalles.${index}.productoId`)}
+                      onChange={(e) => {
+                        register(`detalles.${index}.productoId`).onChange(e)
+                        onProductoChange(index, e.target.value)
+                      }}
+                    >
+                      <option value="">Elegir producto...</option>
+                      {productos.map((p) => {
+                        const stock = stockActual?.[p.id] ?? p.stockTotal
+                        return (
+                          <option key={p.id} value={p.id}>
+                            {p.nombre} — Stock: {stock.toFixed(0)}
+                          </option>
+                        )
+                      })}
+                    </select>
+                    {errors.detalles?.[index]?.productoId && (
+                      <p className="text-xs text-destructive">
+                        {errors.detalles[index]?.productoId?.message}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Unidad */}
+                  <div>
+                    <select
+                      className={selectClasses}
+                      {...register(`detalles.${index}.unidadId`)}
+                      disabled={!productoId}
+                    >
+                      <option value="">—</option>
+                      {unidades.map((u) => (
+                        <option key={u.id} value={u.id}>{u.abreviatura}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Cantidad */}
+                  <div>
+                    <Input
+                      type="number"
+                      step="0.001"
+                      min="0.001"
+                      className={cn(
+                        "h-8 text-sm",
+                        stockExcedido && "border-amber-400 focus-visible:border-amber-500"
+                      )}
+                      {...register(`detalles.${index}.cantidad`, { valueAsNumber: true })}
+                    />
+                  </div>
+
+                  {/* Precio unitario */}
+                  <div className="space-y-1">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      readOnly
+                      className="h-8 text-sm bg-muted/60 cursor-not-allowed select-none"
+                      {...register(`detalles.${index}.precioUnitario`, { valueAsNumber: true })}
+                    />
+                    {subtotalItem > 0 && (
+                      <p className="text-xs text-muted-foreground text-right tabular-nums">
+                        {formatearPesos(subtotalItem)}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Eliminar */}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => remove(index)}
+                    disabled={fields.length === 1}
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10 mt-0.5"
                   >
-                    <option value="">Elegir producto...</option>
-                    {productos.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nombre} (Stock: {Number(p.stockTotal).toFixed(0)})
-                      </option>
-                    ))}
-                  </select>
-                  {errors.detalles?.[index]?.productoId && (
-                    <p className="text-xs text-destructive">{errors.detalles[index]?.productoId?.message}</p>
-                  )}
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
 
-                {/* Unidad */}
-                <div>
-                  <select
-                    className={selectClasses}
-                    {...register(`detalles.${index}.unidadId`)}
-                    disabled={!productoId}
-                  >
-                    <option value="">—</option>
-                    {unidades.map((u) => (
-                      <option key={u.id} value={u.id}>{u.abreviatura}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Cantidad */}
-                <div>
-                  <Input
-                    type="number"
-                    step="0.001"
-                    min="0.001"
-                    className="h-8 text-sm"
-                    {...register(`detalles.${index}.cantidad`, { valueAsNumber: true })}
-                  />
-                </div>
-
-                {/* Precio unitario (solo lectura, se toma del producto) */}
-                <div className="space-y-1">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    readOnly
-                    className="h-8 text-sm bg-muted/60 cursor-not-allowed select-none"
-                    {...register(`detalles.${index}.precioUnitario`, { valueAsNumber: true })}
-                  />
-                  {subtotalItem > 0 && (
-                    <p className="text-xs text-muted-foreground text-right tabular-nums">
-                      {formatearPesos(subtotalItem)}
-                    </p>
-                  )}
-                </div>
-
-                {/* Eliminar */}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => remove(index)}
-                  disabled={fields.length === 1}
-                  className="text-destructive hover:text-destructive hover:bg-destructive/10 mt-0.5"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {/* CAMBIO 3: advertencia ámbar (no bloquea) */}
+                {sinStock && productoId && (
+                  <div className="flex items-center gap-1.5 text-amber-600 text-xs px-1">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    <span>Sin stock disponible. La venta igualmente puede registrarse.</span>
+                  </div>
+                )}
+                {!sinStock && stockExcedido && stockDisponible !== null && (
+                  <div className="flex items-center gap-1.5 text-amber-600 text-xs px-1">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      Cantidad supera el stock disponible ({stockDisponible.toFixed(0)} unid.). La venta
+                      igualmente puede registrarse.
+                    </span>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -263,7 +329,7 @@ export function FormVenta({ clientes, productos, onSubmit }: Props) {
 
       <Separator />
 
-      {/* Totales */}
+      {/* ── Totales ─────────────────────────────────────────────────────── */}
       <div className="flex justify-end">
         <div className="w-64 space-y-2">
           <div className="flex justify-between text-sm">
@@ -294,12 +360,17 @@ export function FormVenta({ clientes, productos, onSubmit }: Props) {
         </div>
       </div>
 
-      {/* Botones */}
+      {/* ── Botones ─────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={guardando || total <= 0}>
           {guardando ? "Registrando..." : "Confirmar venta"}
         </Button>
-        <Button type="button" variant="outline" onClick={() => router.push("/ventas")} disabled={guardando}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => router.push("/ventas")}
+          disabled={guardando}
+        >
           Cancelar
         </Button>
       </div>

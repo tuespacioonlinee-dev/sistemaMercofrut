@@ -2,26 +2,23 @@
 
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useState, useEffect } from "react"
-import { esquemaMovimientoCaja, DatosMovimientoCaja, etiquetasCategoria, categoriasTipo } from "@/lib/validaciones/caja"
+import { useState } from "react"
+import {
+  esquemaMovimientoCaja,
+  DatosMovimientoCaja,
+  etiquetasCategoria,
+  categoriaATipo,
+  etiquetasTipo,
+  CATEGORIAS_MOV_CAJA,
+} from "@/lib/validaciones/caja"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 interface Props {
   onSubmit: (data: DatosMovimientoCaja) => Promise<{ ok?: boolean; error?: string }>
 }
-
-const CATEGORIAS = [
-  "VENTA_CONTADO",
-  "COBRO_CLIENTE",
-  "PAGO_PROVEEDOR",
-  "COMPRA_CONTADO",
-  "GASTO",
-  "RETIRO",
-  "DEPOSITO",
-  "OTRO",
-] as const
 
 export function FormMovimiento({ onSubmit }: Props) {
   const [error, setError] = useState<string | null>(null)
@@ -31,30 +28,21 @@ export function FormMovimiento({ onSubmit }: Props) {
     register,
     handleSubmit,
     watch,
-    setValue,
     reset,
     formState: { errors },
   } = useForm<DatosMovimientoCaja>({
     resolver: zodResolver(esquemaMovimientoCaja),
     defaultValues: {
-      tipo: "INGRESO",
-      categoria: "VENTA_CONTADO",
-      monto: 0,
+      categoria:  "GASTO",
+      ladoOtro:   "DEBE",
+      monto:      0,
       descripcion: "",
     },
   })
 
-  const categoriaSeleccionada = watch("categoria")
-
-  // Auto-actualizar tipo según categoría
-  useEffect(() => {
-    if (categoriaSeleccionada) {
-      const tipo = categoriasTipo[categoriaSeleccionada]
-      if (tipo) setValue("tipo", tipo)
-    }
-  }, [categoriaSeleccionada, setValue])
-
-  const tipoActual = watch("tipo")
+  const categoria  = watch("categoria")
+  const tipoAuto   = categoriaATipo[categoria] // null solo si OTRO
+  const esOtro     = categoria === "OTRO"
 
   async function procesar(data: DatosMovimientoCaja) {
     setError(null)
@@ -63,18 +51,14 @@ export function FormMovimiento({ onSubmit }: Props) {
     if (res.error) {
       setError(res.error)
     } else {
-      reset({
-        tipo: "INGRESO",
-        categoria: "VENTA_CONTADO",
-        monto: 0,
-        descripcion: "",
-      })
+      reset({ categoria: "GASTO", ladoOtro: "DEBE", monto: 0, descripcion: "" })
     }
     setLoading(false)
   }
 
   return (
     <form onSubmit={handleSubmit(procesar)} className="space-y-3">
+      {/* Categoría */}
       <div className="space-y-1">
         <Label htmlFor="categoria">Categoría</Label>
         <select
@@ -82,7 +66,7 @@ export function FormMovimiento({ onSubmit }: Props) {
           {...register("categoria")}
           className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
         >
-          {CATEGORIAS.map((cat) => (
+          {CATEGORIAS_MOV_CAJA.map((cat) => (
             <option key={cat} value={cat}>
               {etiquetasCategoria[cat]}
             </option>
@@ -93,20 +77,46 @@ export function FormMovimiento({ onSubmit }: Props) {
         )}
       </div>
 
-      {/* Tipo derivado — solo informativo */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span>Tipo:</span>
-        <span
-          className={
-            tipoActual === "INGRESO"
-              ? "font-semibold text-green-700"
-              : "font-semibold text-red-700"
-          }
-        >
-          {tipoActual === "INGRESO" ? "Ingreso" : "Egreso"}
-        </span>
+      {/* Tipo contable derivado (informativo) */}
+      <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+        Columna contable:{" "}
+        {esOtro ? (
+          <span className="text-foreground font-medium">según tu elección abajo</span>
+        ) : (
+          <span
+            className={cn(
+              "font-semibold",
+              tipoAuto === "CONTADO_HABER" || tipoAuto === "CC_HABER"
+                ? "text-green-700"
+                : "text-red-700"
+            )}
+          >
+            {tipoAuto ? etiquetasTipo[tipoAuto] : "—"}
+          </span>
+        )}
       </div>
 
+      {/* Selector DEBE/HABER — solo visible para OTRO */}
+      {esOtro && (
+        <div className="space-y-1">
+          <Label>¿Es ingreso o egreso de caja?</Label>
+          <div className="flex gap-2">
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input type="radio" value="HABER" {...register("ladoOtro")} />
+              <span className="text-sm text-green-700 font-medium">HABER (ingreso)</span>
+            </label>
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input type="radio" value="DEBE" {...register("ladoOtro")} />
+              <span className="text-sm text-red-700 font-medium">DEBE (egreso)</span>
+            </label>
+          </div>
+          {errors.ladoOtro && (
+            <p className="text-xs text-destructive">{errors.ladoOtro.message}</p>
+          )}
+        </div>
+      )}
+
+      {/* Monto */}
       <div className="space-y-1">
         <Label htmlFor="monto">Monto ($)</Label>
         <Input
@@ -122,6 +132,7 @@ export function FormMovimiento({ onSubmit }: Props) {
         )}
       </div>
 
+      {/* Descripción */}
       <div className="space-y-1">
         <Label htmlFor="descripcion">Descripción</Label>
         <Input
