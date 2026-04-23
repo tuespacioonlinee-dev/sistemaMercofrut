@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useTransition } from "react"
+import { useTransition, useState } from "react"
 import { toast } from "sonner"
 import { Plus, Trash2, CalendarClock } from "lucide-react"
 import type { UnidadMedida } from "@prisma/client"
@@ -45,7 +45,9 @@ const $ar = (n: number) =>
 
 export function FormCompra({ proveedores, productos, unidades }: Props) {
   const router = useRouter()
-  const [isPending, startTransition] = useTransition()
+  const [isPending, startTransition]  = useTransition()
+  const [modoDesc, setModoDesc]       = useState<"fijo" | "pct">("fijo")
+  const [valorDesc, setValorDesc]     = useState(0)
 
   const {
     register,
@@ -343,13 +345,44 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
                   <span className="font-medium w-32 text-right text-blue-600">{$ar(iva)}</span>
                 </div>
               )}
-              <div className="flex items-center gap-8">
-                <span className="text-slate-500">Descuento</span>
-                <Input
-                  type="number" step="0.01" min="0"
-                  className="h-7 w-32 text-right text-sm"
-                  {...register("descuento", { valueAsNumber: true })}
-                />
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500">Descuento</span>
+                  <div className="flex rounded-md border text-xs overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => { setModoDesc("fijo"); setValorDesc(0); setValue("descuento", 0) }}
+                      className={cn("px-2 py-0.5 transition-colors", modoDesc === "fijo" ? "bg-slate-800 text-white" : "text-muted-foreground hover:bg-muted")}
+                    >$</button>
+                    <button
+                      type="button"
+                      onClick={() => { setModoDesc("pct"); setValorDesc(0); setValue("descuento", 0) }}
+                      className={cn("px-2 py-0.5 transition-colors", modoDesc === "pct" ? "bg-slate-800 text-white" : "text-muted-foreground hover:bg-muted")}
+                    >%</button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    step={modoDesc === "pct" ? "0.1" : "0.01"}
+                    min="0"
+                    max={modoDesc === "pct" ? "100" : undefined}
+                    className="h-7 w-24 text-right text-sm"
+                    value={valorDesc || ""}
+                    onChange={(e) => {
+                      const val = Number(e.target.value) || 0
+                      setValorDesc(val)
+                      const base = subtotal + iva
+                      const monto = modoDesc === "pct" ? Math.round(base * val / 100 * 100) / 100 : val
+                      setValue("descuento", Math.min(monto, base))
+                    }}
+                  />
+                  {modoDesc === "pct" && valorDesc > 0 && (
+                    <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                      = {$ar(descuento)}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="flex gap-8 pt-2 border-t">
                 <span className="font-semibold">Total</span>

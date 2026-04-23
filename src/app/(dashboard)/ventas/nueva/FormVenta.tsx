@@ -55,7 +55,9 @@ const selectClasses = cn(
 
 export function FormVenta({ clientes, productos, onSubmit }: Props) {
   const router    = useRouter()
-  const [guardando, setGuardando] = useState(false)
+  const [guardando, setGuardando]         = useState(false)
+  const [modoDesc, setModoDesc]           = useState<"fijo" | "pct">("fijo")
+  const [valorDesc, setValorDesc]         = useState(0)
 
   // Stock en tiempo real — se refresca cada 30 s automáticamente
   const { data: stockActual } = useQuery<Record<string, number>>({
@@ -337,17 +339,43 @@ export function FormVenta({ clientes, productos, onSubmit }: Props) {
           </div>
 
           <div className="flex items-center justify-between text-sm gap-4">
-            <Label htmlFor="descuento" className="text-muted-foreground whitespace-nowrap">
-              Descuento ($)
-            </Label>
-            <Input
-              id="descuento"
-              type="number"
-              step="0.01"
-              min="0"
-              className="h-7 text-sm w-28 text-right"
-              {...register("descuento", { valueAsNumber: true })}
-            />
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground whitespace-nowrap">Descuento</span>
+              {/* Toggle $ / % */}
+              <div className="flex rounded-md border text-xs overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => { setModoDesc("fijo"); setValorDesc(0); setValue("descuento", 0) }}
+                  className={cn("px-2 py-0.5 transition-colors", modoDesc === "fijo" ? "bg-slate-800 text-white" : "text-muted-foreground hover:bg-muted")}
+                >$</button>
+                <button
+                  type="button"
+                  onClick={() => { setModoDesc("pct"); setValorDesc(0); setValue("descuento", 0) }}
+                  className={cn("px-2 py-0.5 transition-colors", modoDesc === "pct" ? "bg-slate-800 text-white" : "text-muted-foreground hover:bg-muted")}
+                >%</button>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                step={modoDesc === "pct" ? "0.1" : "0.01"}
+                min="0"
+                max={modoDesc === "pct" ? "100" : undefined}
+                className="h-7 text-sm w-24 text-right"
+                value={valorDesc || ""}
+                onChange={(e) => {
+                  const val = Number(e.target.value) || 0
+                  setValorDesc(val)
+                  const monto = modoDesc === "pct" ? Math.round(subtotal * val / 100 * 100) / 100 : val
+                  setValue("descuento", Math.min(monto, subtotal))
+                }}
+              />
+              {modoDesc === "pct" && valorDesc > 0 && (
+                <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                  = {formatearPesos(Number(descuento))}
+                </span>
+              )}
+            </div>
           </div>
 
           <Separator />
