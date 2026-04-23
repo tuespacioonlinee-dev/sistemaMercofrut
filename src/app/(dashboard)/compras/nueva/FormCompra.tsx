@@ -32,6 +32,7 @@ type ProductoConUnidad = {
   nombre: string
   codigo: string
   controlaVencimiento: boolean
+  stockTotal: number
   unidadBase: { id: string; nombre: string; abreviatura: string }
 }
 
@@ -230,7 +231,7 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
               return (
                 <div key={field.id} className="space-y-2 border rounded-lg p-3 bg-muted/20">
                   {/* Fila principal */}
-                  <div className="grid grid-cols-[1fr_140px_90px_110px_32px] gap-2 items-start">
+                  <div className="grid grid-cols-[1fr_100px_90px_90px_110px_32px] gap-2 items-start">
                     {/* Producto */}
                     <div>
                       <select
@@ -254,6 +255,23 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
                       {errors.detalles?.[i]?.productoId && (
                         <p className="text-xs text-destructive mt-0.5">{errors.detalles[i].productoId?.message}</p>
                       )}
+                    </div>
+
+                    {/* Stock actual */}
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Stock</p>
+                      <div className={cn(
+                        "h-8 flex items-center px-2.5 rounded-lg border text-xs font-semibold tabular-nums",
+                        !productoSeleccionado
+                          ? "text-muted-foreground bg-muted/30 border-muted"
+                          : productoSeleccionado.stockTotal === 0
+                            ? "text-red-600 bg-red-50 border-red-200"
+                            : "text-emerald-700 bg-emerald-50 border-emerald-200"
+                      )}>
+                        {productoSeleccionado
+                          ? productoSeleccionado.stockTotal.toFixed(0)
+                          : "—"}
+                      </div>
                     </div>
 
                     {/* Unidad */}

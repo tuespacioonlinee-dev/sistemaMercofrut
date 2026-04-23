@@ -199,8 +199,9 @@ export function FormVenta({ clientes, productos, onSubmit }: Props) {
 
         <div className="space-y-2">
           {/* Encabezado de columnas */}
-          <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] gap-2 px-2">
+          <div className="grid grid-cols-[2fr_80px_1fr_1fr_1fr_auto] gap-2 px-2">
             <span className="text-xs font-semibold text-muted-foreground">Producto</span>
+            <span className="text-xs font-semibold text-muted-foreground">Stock</span>
             <span className="text-xs font-semibold text-muted-foreground">Unidad</span>
             <span className="text-xs font-semibold text-muted-foreground">Cantidad</span>
             <span className="text-xs font-semibold text-muted-foreground">Precio unit.</span>
@@ -214,14 +215,14 @@ export function FormVenta({ clientes, productos, onSubmit }: Props) {
             const unidades   = getUnidadesProducto(productoId)
             const subtotalItem = cantidad * precio
 
-            // CAMBIO 3: stock en tiempo real con advertencia ámbar
+            // Stock en tiempo real con advertencia ámbar
             const stockDisponible = productoId ? (stockActual?.[productoId] ?? null) : null
             const sinStock        = stockDisponible !== null && stockDisponible === 0
             const stockExcedido   = stockDisponible !== null && cantidad > stockDisponible
 
             return (
               <div key={field.id} className="space-y-1">
-                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] gap-2 items-start">
+                <div className="grid grid-cols-[2fr_80px_1fr_1fr_1fr_auto] gap-2 items-start">
                   {/* Producto */}
                   <div className="space-y-1">
                     <select
@@ -233,20 +234,29 @@ export function FormVenta({ clientes, productos, onSubmit }: Props) {
                       }}
                     >
                       <option value="">Elegir producto...</option>
-                      {productos.map((p) => {
-                        const stock = stockActual?.[p.id] ?? p.stockTotal
-                        return (
-                          <option key={p.id} value={p.id}>
-                            {p.nombre} — Stock: {stock.toFixed(0)}
-                          </option>
-                        )
-                      })}
+                      {productos.map((p) => (
+                        <option key={p.id} value={p.id}>{p.nombre}</option>
+                      ))}
                     </select>
                     {errors.detalles?.[index]?.productoId && (
                       <p className="text-xs text-destructive">
                         {errors.detalles[index]?.productoId?.message}
                       </p>
                     )}
+                  </div>
+
+                  {/* Stock actual — se refresca cada 30s */}
+                  <div className={cn(
+                    "h-8 flex items-center justify-center rounded-lg border text-xs font-semibold tabular-nums",
+                    stockDisponible === null
+                      ? "text-muted-foreground bg-muted/30 border-muted"
+                      : sinStock
+                        ? "text-red-600 bg-red-50 border-red-200"
+                        : stockExcedido
+                          ? "text-amber-600 bg-amber-50 border-amber-200"
+                          : "text-emerald-700 bg-emerald-50 border-emerald-200"
+                  )}>
+                    {stockDisponible !== null ? stockDisponible.toFixed(0) : "—"}
                   </div>
 
                   {/* Unidad */}
