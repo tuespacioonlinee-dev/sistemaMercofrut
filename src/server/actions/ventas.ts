@@ -4,6 +4,12 @@ import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { ventaSchema } from "@/lib/validaciones/ventas"
+import { formatearNumeroRemito } from "@/lib/validaciones/remitos"
+import { registrarMovimientoCajaEnTx } from "@/server/actions/caja"
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Queries
+// ─────────────────────────────────────────────────────────────────────────────
 
 export async function obtenerVentas() {
   return prisma.venta.findMany({
@@ -11,6 +17,7 @@ export async function obtenerVentas() {
     include: {
       cliente: { select: { nombreRazonSocial: true } },
       creadaPor: { select: { nombre: true } },
+      remitos: { select: { id: true, numero: true, estado: true } },
     },
     orderBy: { fecha: "desc" },
     take: 100,
@@ -31,9 +38,14 @@ export async function obtenerVentaPorId(id: string) {
         },
       },
       remitos: true,
+      facturas: { select: { id: true, numero: true, tipo: true, estado: true } },
     },
   })
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Crear venta + remito + movimiento de caja en una sola transacción
+// ─────────────────────────────────────────────────────────────────────────────
 
 export async function crearVenta(data: unknown) {
   const session = await auth()
@@ -46,7 +58,7 @@ export async function crearVenta(data: unknown) {
 
   // Traer productos y factores de conversión
   const productosIds = [...new Set(detalles.map((d) => d.productoId))]
-  const unidadesIds = [...new Set(detalles.map((d) => d.unidadId))]
+  const unidadesIds  = [...new Set(detalles.map((d) => d.unidadId))]
 
   const [productosUnidades, productos] = await Promise.all([
     prisma.productoUnidad.findMany({
@@ -55,32 +67,32 @@ export async function crearVenta(data: unknown) {
     prisma.producto.findMany({ where: { id: { in: productosIds } } }),
   ])
 
-  // Verificar stock suficiente antes de operar
+  // Calcular cantidades en unidad base
   const detallesConBase = detalles.map((d) => {
     const pu = productosUnidades.find(
       (p) => p.productoId === d.productoId && p.unidadId === d.unidadId
     )
-    const factor = pu ? Number(pu.factor) : 1
+    const factor      = pu ? Number(pu.factor) : 1
     const cantidadBase = d.cantidad * factor
-    const subtotal = d.cantidad * d.precioUnitario
+    const subtotal     = d.cantidad * d.precioUnitario
     return { ...d, cantidadBase, subtotal }
   })
 
+  // Verificar stock (advertencia, no bloqueo)
   for (const d of detallesConBase) {
     const producto = productos.find((p) => p.id === d.productoId)
     if (!producto) return { error: `Producto no encontrado.` }
-    if (Number(producto.stockTotal) < d.cantidadBase) {
-      return { error: `Stock insuficiente para "${producto.nombre}". Stock actual: ${Number(producto.stockTotal).toFixed(3)}` }
-    }
   }
 
   const subtotal = detallesConBase.reduce((acc, d) => acc + d.subtotal, 0)
-  const total = subtotal - descuento
+  const total    = subtotal - descuento
 
-  let ventaId: string
+  let ventaId:  string
+  let remitoId: string
+  let remitoNumero: string
 
   await prisma.$transaction(async (tx) => {
-    // 1. Buscar o crear cuenta del cliente según condición
+    // ── 1. Buscar o crear cuenta del cliente ─────────────────────────────
     let cuenta = await tx.cuenta.findFirst({
       where: {
         clienteId,
@@ -93,33 +105,33 @@ export async function crearVenta(data: unknown) {
       const cliente = await tx.cliente.findUnique({ where: { id: clienteId } })
       cuenta = await tx.cuenta.create({
         data: {
-          nombre: `${condicion === "CUENTA_CORRIENTE" ? "Cta. Cte." : "Contado"} - ${cliente?.nombreRazonSocial ?? "Cliente"}`,
-          tipo: condicion === "CUENTA_CORRIENTE" ? "CORRIENTE" : "CONTADO",
-          titular: "CLIENTE",
+          nombre:    `${condicion === "CUENTA_CORRIENTE" ? "Cta. Cte." : "Contado"} - ${cliente?.nombreRazonSocial ?? "Cliente"}`,
+          tipo:      condicion === "CUENTA_CORRIENTE" ? "CORRIENTE" : "CONTADO",
+          titular:   "CLIENTE",
           clienteId,
         },
       })
     }
 
-    // 2. Crear la venta con sus detalles
+    // ── 2. Crear la venta ─────────────────────────────────────────────────
     const venta = await tx.venta.create({
       data: {
         clienteId,
-        cuentaId: cuenta.id,
+        cuentaId:  cuenta.id,
         condicion,
         subtotal,
         descuento,
         total,
-        observaciones: observaciones || null,
-        creadaPorId: session.user.id,
+        observaciones: observaciones ?? null,
+        creadaPorId:   session.user.id,
         detalles: {
           create: detallesConBase.map((d) => ({
-            productoId: d.productoId,
-            unidadId: d.unidadId,
-            cantidad: d.cantidad,
-            cantidadBase: d.cantidadBase,
+            productoId:     d.productoId,
+            unidadId:       d.unidadId,
+            cantidad:       d.cantidad,
+            cantidadBase:   d.cantidadBase,
             precioUnitario: d.precioUnitario,
-            subtotal: d.subtotal,
+            subtotal:       d.subtotal,
           })),
         },
       },
@@ -127,136 +139,207 @@ export async function crearVenta(data: unknown) {
 
     ventaId = venta.id
 
-    // 3. Descontar stock + registrar movimientos
+    // ── 3. Descontar stock ────────────────────────────────────────────────
     for (const d of detallesConBase) {
-      const producto = productos.find((p) => p.id === d.productoId)!
-      const stockAnterior = Number(producto.stockTotal)
+      const producto     = productos.find((p) => p.id === d.productoId)!
+      const stockAnterior  = Number(producto.stockTotal)
       const stockPosterior = stockAnterior - d.cantidadBase
 
       await tx.producto.update({
         where: { id: d.productoId },
-        data: { stockTotal: stockPosterior },
+        data:  { stockTotal: stockPosterior },
       })
 
       await tx.movimientoStock.create({
         data: {
-          productoId: d.productoId,
-          tipo: "EGRESO_VENTA",
-          cantidad: d.cantidadBase,
+          productoId:    d.productoId,
+          tipo:          "EGRESO_VENTA",
+          cantidad:      d.cantidadBase,
           stockAnterior,
           stockPosterior,
-          usuarioId: session.user.id,
-          origenTipo: "venta",
-          origenId: venta.id,
+          usuarioId:     session.user.id,
+          origenTipo:    "venta",
+          origenId:      venta.id,
         },
       })
     }
 
-    // 4. Registrar movimiento en cuenta corriente
-    const saldoAnterior = Number(cuenta.saldo)
+    // ── 4. Movimiento de cuenta corriente ────────────────────────────────
+    const saldoAnterior  = Number(cuenta.saldo)
     const saldoPosterior = saldoAnterior + total
 
     await tx.cuenta.update({
       where: { id: cuenta.id },
-      data: { saldo: saldoPosterior },
+      data:  { saldo: saldoPosterior },
     })
 
     await tx.movimientoCuenta.create({
       data: {
-        cuentaId: cuenta.id,
-        tipo: "DEBE",
-        monto: total,
+        cuentaId:      cuenta.id,
+        tipo:          "DEBE",
+        monto:         total,
         saldoAnterior,
         saldoPosterior,
-        descripcion: `Venta #${venta.numero}`,
-        usuarioId: session.user.id,
-        origenTipo: "venta",
-        origenId: venta.id,
+        descripcion:   `Venta #${venta.numero}`,
+        usuarioId:     session.user.id,
+        origenTipo:    "venta",
+        origenId:      venta.id,
       },
     })
+
+    // ── 5. Crear remito correlativo en la misma transacción ───────────────
+    let comp = await tx.parametrosComprobante.findFirst()
+    if (!comp) {
+      comp = await tx.parametrosComprobante.create({ data: { puntoVenta: 1 } })
+    }
+
+    const numero = formatearNumeroRemito(comp.puntoVenta, comp.proximoRemito)
+
+    await tx.parametrosComprobante.update({
+      where: { id: comp.id },
+      data:  { proximoRemito: { increment: 1 } },
+    })
+
+    const remito = await tx.remito.create({
+      data: {
+        numero,
+        puntoVenta: comp.puntoVenta,
+        ventaId:    venta.id,
+        estado:     "EMITIDO",
+      },
+    })
+
+    remitoId     = remito.id
+    remitoNumero = remito.numero
+
+    // ── 6. Movimiento de caja (solo venta contado) ────────────────────────
+    if (condicion === "CONTADO") {
+      await registrarMovimientoCajaEnTx(tx, {
+        tipo:        "CONTADO_HABER",
+        categoria:   "VENTA_CONTADO",
+        monto:       total,
+        descripcion: `Venta #${venta.numero} — Remito ${numero}`,
+        usuarioId:   session.user.id,
+        origenTipo:  "venta",
+        origenId:    venta.id,
+      })
+    }
+    // Venta CC: no toca caja, solo cuenta corriente (paso 4)
   })
 
   revalidatePath("/ventas")
+  revalidatePath("/remitos")
   revalidatePath("/stock")
   revalidatePath("/cuentas")
-  return { ok: true, id: ventaId! }
+  revalidatePath("/caja")
+
+  return { ok: true, ventaId: ventaId!, remitoId: remitoId!, remitoNumero: remitoNumero! }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Anular venta (y sus remitos)
+// ─────────────────────────────────────────────────────────────────────────────
 
 export async function anularVenta(id: string, motivo: string) {
   const session = await auth()
   if (!session) return { error: "No autorizado" }
 
   const venta = await prisma.venta.findUnique({
-    where: { id },
-    include: { detalles: true },
+    where:   { id },
+    include: { detalles: true, remitos: true },
   })
   if (!venta) return { error: "Venta no encontrada" }
   if (venta.estado === "ANULADA") return { error: "La venta ya está anulada" }
 
   await prisma.$transaction(async (tx) => {
-    // 1. Marcar como anulada
+    // 1. Marcar venta como anulada
     await tx.venta.update({
       where: { id },
-      data: { estado: "ANULADA", anuladaEn: new Date(), motivoAnulacion: motivo },
+      data:  { estado: "ANULADA", anuladaEn: new Date(), motivoAnulacion: motivo },
     })
 
-    // 2. Devolver stock
+    // 2. Anular remitos vinculados
+    for (const remito of venta.remitos) {
+      if (remito.estado === "EMITIDO") {
+        await tx.remito.update({
+          where: { id: remito.id },
+          data:  { estado: "ANULADO", anuladoEn: new Date(), motivoAnulacion: motivo },
+        })
+      }
+    }
+
+    // 3. Devolver stock
     for (const detalle of venta.detalles) {
       const producto = await tx.producto.findUnique({ where: { id: detalle.productoId } })
       if (!producto) continue
 
-      const stockAnterior = Number(producto.stockTotal)
+      const stockAnterior  = Number(producto.stockTotal)
       const stockPosterior = stockAnterior + Number(detalle.cantidadBase)
 
       await tx.producto.update({
         where: { id: detalle.productoId },
-        data: { stockTotal: stockPosterior },
+        data:  { stockTotal: stockPosterior },
       })
 
       await tx.movimientoStock.create({
         data: {
-          productoId: detalle.productoId,
-          tipo: "DEVOLUCION_CLIENTE",
-          cantidad: Number(detalle.cantidadBase),
+          productoId:    detalle.productoId,
+          tipo:          "DEVOLUCION_CLIENTE",
+          cantidad:      Number(detalle.cantidadBase),
           stockAnterior,
           stockPosterior,
-          motivo: `Anulación venta #${venta.numero}`,
-          usuarioId: session.user.id,
-          origenTipo: "venta",
-          origenId: id,
+          motivo:        `Anulación venta #${venta.numero}`,
+          usuarioId:     session.user.id,
+          origenTipo:    "venta",
+          origenId:      id,
         },
       })
     }
 
-    // 3. Revertir movimiento de cuenta
+    // 4. Revertir movimiento de cuenta
     const cuenta = await tx.cuenta.findUnique({ where: { id: venta.cuentaId } })
     if (cuenta) {
-      const saldoAnterior = Number(cuenta.saldo)
+      const saldoAnterior  = Number(cuenta.saldo)
       const saldoPosterior = saldoAnterior - Number(venta.total)
 
       await tx.cuenta.update({
         where: { id: cuenta.id },
-        data: { saldo: saldoPosterior },
+        data:  { saldo: saldoPosterior },
       })
 
       await tx.movimientoCuenta.create({
         data: {
-          cuentaId: cuenta.id,
-          tipo: "HABER",
-          monto: Number(venta.total),
+          cuentaId:      cuenta.id,
+          tipo:          "HABER",
+          monto:         Number(venta.total),
           saldoAnterior,
           saldoPosterior,
-          descripcion: `Anulación venta #${venta.numero}`,
-          usuarioId: session.user.id,
-          origenTipo: "venta",
-          origenId: id,
+          descripcion:   `Anulación venta #${venta.numero}`,
+          usuarioId:     session.user.id,
+          origenTipo:    "venta",
+          origenId:      id,
         },
+      })
+    }
+
+    // 5. Contraasiento en caja si era contado
+    if (venta.condicion === "CONTADO") {
+      await registrarMovimientoCajaEnTx(tx, {
+        tipo:        "CONTADO_DEBE",
+        categoria:   "VENTA_CONTADO",
+        monto:       Number(venta.total),
+        descripcion: `Anulación venta #${venta.numero}`,
+        usuarioId:   session.user.id,
+        origenTipo:  "venta",
+        origenId:    id,
       })
     }
   })
 
   revalidatePath("/ventas")
+  revalidatePath("/remitos")
   revalidatePath("/stock")
   revalidatePath("/cuentas")
+  revalidatePath("/caja")
   return { ok: true }
 }
