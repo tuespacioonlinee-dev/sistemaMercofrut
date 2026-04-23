@@ -281,8 +281,7 @@ export function FormVenta({ clientes, productos, onSubmit }: Props) {
                       type="number"
                       step="0.01"
                       min="0"
-                      readOnly
-                      className="h-8 text-sm bg-muted/60 cursor-not-allowed select-none"
+                      className="h-8 text-sm"
                       {...register(`detalles.${index}.precioUnitario`, { valueAsNumber: true })}
                     />
                     {subtotalItem > 0 && (
