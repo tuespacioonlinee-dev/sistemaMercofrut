@@ -1,10 +1,11 @@
 import { obtenerRemitos } from "@/server/actions/remitos"
+import { prisma } from "@/lib/prisma"
 import { formatearPesos } from "@/lib/utils"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus } from "lucide-react"
+import { Plus, Settings2 } from "lucide-react"
 
 export const dynamic = "force-dynamic"
 
@@ -14,7 +15,10 @@ const estadoBadge: Record<string, { label: string; className: string }> = {
 }
 
 export default async function RemitosPage() {
-  const remitosRaw = await obtenerRemitos()
+  const [remitosRaw, comprobantes] = await Promise.all([
+    obtenerRemitos(),
+    prisma.parametrosComprobante.findFirst({ select: { puntoVenta: true, proximoRemito: true } }),
+  ])
 
   const remitos = remitosRaw.map((r) => ({
     ...r,
@@ -29,12 +33,32 @@ export default async function RemitosPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Remitos</h1>
-          <p className="text-sm text-muted-foreground">{remitos.length} remito{remitos.length !== 1 ? "s" : ""} registrado{remitos.length !== 1 ? "s" : ""}</p>
+          <p className="text-sm text-muted-foreground">
+            {remitos.length} remito{remitos.length !== 1 ? "s" : ""} registrado{remitos.length !== 1 ? "s" : ""}
+            {comprobantes && (
+              <span className="ml-2 text-muted-foreground">
+                · Próximo:{" "}
+                <span className="font-mono font-medium text-foreground">
+                  {String(comprobantes.puntoVenta).padStart(4, "0")}-{String(comprobantes.proximoRemito).padStart(8, "0")}
+                </span>
+              </span>
+            )}
+          </p>
         </div>
-        <Link href="/remitos/nuevo" className={buttonVariants()}>
-          <Plus className="h-4 w-4 mr-2" />
-          Nuevo remito
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/parametros#numeracion"
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+            title="Configurar numeración de remitos"
+          >
+            <Settings2 className="h-4 w-4 mr-1" />
+            Numeración
+          </Link>
+          <Link href="/remitos/nuevo" className={buttonVariants()}>
+            <Plus className="h-4 w-4 mr-2" />
+            Nuevo remito
+          </Link>
+        </div>
       </div>
 
       {remitos.length === 0 ? (
@@ -72,13 +96,17 @@ export default async function RemitosPage() {
                     <td className="px-4 py-3 font-mono font-semibold">{r.numero}</td>
                     <td className="px-4 py-3 tabular-nums text-muted-foreground whitespace-nowrap">
                       {new Date(r.fecha).toLocaleDateString("es-AR", {
-                        day: "2-digit",
+                        day:   "2-digit",
                         month: "2-digit",
-                        year: "numeric",
+                        year:  "numeric",
                       })}
                     </td>
                     <td className="px-4 py-3 font-medium">{r.venta.cliente.nombreRazonSocial}</td>
-                    <td className="px-4 py-3 text-muted-foreground">#{r.venta.numero}</td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      <Link href={`/ventas/${r.ventaId}`} className="hover:underline">
+                        #{r.venta.numero}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 text-right tabular-nums font-medium">
                       {formatearPesos(r.venta.total)}
                     </td>

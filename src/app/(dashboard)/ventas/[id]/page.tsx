@@ -2,22 +2,28 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { obtenerVentaPorId } from "@/server/actions/ventas"
 import { Badge } from "@/components/ui/badge"
-import { formatearPesos } from "@/lib/utils"
-import { ChevronLeft } from "lucide-react"
+import { buttonVariants } from "@/components/ui/button"
+import { formatearPesos, cn } from "@/lib/utils"
+import { ChevronLeft, FileText } from "lucide-react"
 
 interface Props {
   params: Promise<{ id: string }>
 }
 
 const etiquetasCondicion: Record<string, string> = {
-  CONTADO: "Contado",
+  CONTADO:          "Contado",
   CUENTA_CORRIENTE: "Cuenta Corriente",
 }
 
 const etiquetasEstado: Record<string, string> = {
   CONFIRMADA: "Confirmada",
-  PENDIENTE: "Pendiente",
-  ANULADA: "Anulada",
+  PENDIENTE:  "Pendiente",
+  ANULADA:    "Anulada",
+}
+
+const estadoRemitoBadge: Record<string, { label: string; className: string }> = {
+  EMITIDO: { label: "Emitido", className: "bg-green-100 text-green-700 hover:bg-green-100" },
+  ANULADO: { label: "Anulado", className: "bg-red-100 text-red-700 hover:bg-red-100" },
 }
 
 export default async function DetalleVentaPage({ params }: Props) {
@@ -73,6 +79,34 @@ export default async function DetalleVentaPage({ params }: Props) {
           <Badge variant="outline">{etiquetasCondicion[venta.condicion]}</Badge>
         </div>
       </div>
+
+      {/* Remitos vinculados */}
+      {venta.remitos.length > 0 && (
+        <div>
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">
+            Remito{venta.remitos.length !== 1 ? "s" : ""} vinculado{venta.remitos.length !== 1 ? "s" : ""}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {venta.remitos.map((r) => {
+              const badge = estadoRemitoBadge[r.estado] ?? estadoRemitoBadge.EMITIDO
+              return (
+                <Link
+                  key={r.id}
+                  href={`/remitos/${r.id}`}
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "sm" }),
+                    "gap-2 font-mono"
+                  )}
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  {r.numero}
+                  <Badge className={cn("text-xs ml-1", badge.className)}>{badge.label}</Badge>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Ítems */}
       <div>
