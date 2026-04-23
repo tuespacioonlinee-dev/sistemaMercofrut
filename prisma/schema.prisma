@@ -324,6 +324,12 @@ model CajaDiaria {
   abiertaPorId  String
   cerradaPorId  String?
 
+  // Totales por columna contable — se congela al cerrar
+  totalContadoHaber Decimal? @db.Decimal(14, 2)
+  totalContadoDebe  Decimal? @db.Decimal(14, 2)
+  totalCCHaber      Decimal? @db.Decimal(14, 2)
+  totalCCDebe       Decimal? @db.Decimal(14, 2)
+
   abiertaPor Usuario  @relation("CajaAbiertaPor", fields: [abiertaPorId], references: [id])
   cerradaPor Usuario? @relation("CajaCerradaPor", fields: [cerradaPorId], references: [id])
 
@@ -334,8 +340,10 @@ model CajaDiaria {
 }
 
 enum TipoMovCaja {
-  INGRESO
-  EGRESO
+  CONTADO_DEBE
+  CONTADO_HABER
+  CC_DEBE
+  CC_HABER
 }
 
 enum CategoriaMovCaja {
@@ -361,6 +369,7 @@ model MovimientoCaja {
 
   origenTipo String?
   origenId   String?
+  deletedAt  DateTime?
 
   caja    CajaDiaria @relation(fields: [cajaId], references: [id])
   usuario Usuario    @relation(fields: [usuarioId], references: [id])

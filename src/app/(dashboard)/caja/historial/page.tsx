@@ -40,6 +40,7 @@ export default async function HistorialCajaPage() {
                 <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Saldo final</th>
                 <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Arqueo</th>
                 <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Diferencia</th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -86,6 +87,14 @@ export default async function HistorialCajaPage() {
                     >
                       {diferencia > 0 ? "+" : ""}
                       {formatearPesos(diferencia)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Link
+                        href={`/caja/reporte?cajaId=${caja.id}`}
+                        className={buttonVariants({ variant: "ghost", size: "sm" })}
+                      >
+                        Reporte
+                      </Link>
                     </td>
                   </tr>
                 )
