@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { NavLink } from "@/components/shared/NavLink"
 import { LogoutButton } from "@/components/shared/LogoutButton"
+import { Toaster } from "@/components/ui/sonner"
 import {
   Users,
   ShoppingCart,
@@ -85,6 +86,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <main className="flex-1 ml-64 flex flex-col min-h-screen">
         <div className="p-6">{children}</div>
       </main>
+      <Toaster richColors position="top-right" />
     </div>
   )
 }

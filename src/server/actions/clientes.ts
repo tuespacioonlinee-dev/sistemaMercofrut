@@ -34,22 +34,25 @@ export async function crearCliente(formData: unknown) {
     return { error: "Ya existe un cliente con ese número de documento." }
   }
 
-  const cliente = await prisma.cliente.create({
-    data: {
-      nombreRazonSocial: data.nombreRazonSocial,
-      tipoDocumento: data.tipoDocumento,
-      documento: data.documento,
-      condicionIva: data.condicionIva,
-      direccion: data.direccion || null,
-      localidad: data.localidad || null,
-      telefono: data.telefono || null,
-      email: data.email || null,
-      observaciones: data.observaciones || null,
-    },
-  })
-
-  revalidatePath("/clientes")
-  return { ok: true, id: cliente.id }
+  try {
+    const cliente = await prisma.cliente.create({
+      data: {
+        nombreRazonSocial: data.nombreRazonSocial,
+        tipoDocumento: data.tipoDocumento,
+        documento: data.documento,
+        condicionIva: data.condicionIva,
+        direccion: data.direccion || null,
+        localidad: data.localidad || null,
+        telefono: data.telefono || null,
+        email: data.email || null,
+        observaciones: data.observaciones || null,
+      },
+    })
+    revalidatePath("/clientes")
+    return { ok: true, id: cliente.id }
+  } catch {
+    return { error: "Ya existe un cliente con ese número de documento." }
+  }
 }
 
 export async function editarCliente(id: string, formData: unknown) {
@@ -69,24 +72,27 @@ export async function editarCliente(id: string, formData: unknown) {
     return { error: "Ya existe otro cliente con ese número de documento." }
   }
 
-  await prisma.cliente.update({
-    where: { id },
-    data: {
-      nombreRazonSocial: data.nombreRazonSocial,
-      tipoDocumento: data.tipoDocumento,
-      documento: data.documento,
-      condicionIva: data.condicionIva,
-      direccion: data.direccion || null,
-      localidad: data.localidad || null,
-      telefono: data.telefono || null,
-      email: data.email || null,
-      observaciones: data.observaciones || null,
-    },
-  })
-
-  revalidatePath("/clientes")
-  revalidatePath(`/clientes/${id}/editar`)
-  return { ok: true }
+  try {
+    await prisma.cliente.update({
+      where: { id },
+      data: {
+        nombreRazonSocial: data.nombreRazonSocial,
+        tipoDocumento: data.tipoDocumento,
+        documento: data.documento,
+        condicionIva: data.condicionIva,
+        direccion: data.direccion || null,
+        localidad: data.localidad || null,
+        telefono: data.telefono || null,
+        email: data.email || null,
+        observaciones: data.observaciones || null,
+      },
+    })
+    revalidatePath("/clientes")
+    revalidatePath(`/clientes/${id}/editar`)
+    return { ok: true }
+  } catch {
+    return { error: "Ya existe otro cliente con ese número de documento." }
+  }
 }
 
 export async function eliminarCliente(id: string) {
