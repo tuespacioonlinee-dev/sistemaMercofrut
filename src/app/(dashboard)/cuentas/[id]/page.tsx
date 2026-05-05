@@ -2,9 +2,10 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { obtenerCuentaPorId } from "@/server/actions/cuentas"
 import { Badge } from "@/components/ui/badge"
+import { buttonVariants } from "@/components/ui/button"
 import { etiquetasTipoCuenta } from "@/lib/validaciones/cuentas"
 import { formatearPesos } from "@/lib/utils"
-import { ChevronLeft } from "lucide-react"
+import { ChevronLeft, HandCoins } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface Props {
@@ -46,17 +47,28 @@ export default async function DetalleCuentaPage({ params }: Props) {
             <span className="text-sm text-muted-foreground">{cuenta.nombre}</span>
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-sm text-muted-foreground">Saldo actual</p>
-          <p className={cn(
-            "text-3xl font-bold tabular-nums",
-            saldo > 0 ? "text-destructive" : saldo < 0 ? "text-green-600" : "text-foreground"
-          )}>
-            {formatearPesos(saldo)}
-          </p>
-          {saldo > 0 && <p className="text-xs text-destructive">Debe al negocio</p>}
-          {saldo < 0 && <p className="text-xs text-green-600">A favor del cliente</p>}
-          {saldo === 0 && <p className="text-xs text-muted-foreground">Sin saldo pendiente</p>}
+        <div className="flex flex-col items-end gap-3">
+          {cuenta.tipo === "CORRIENTE" && (
+            <Link
+              href={`/cobros/nuevo?cuentaId=${cuenta.id}`}
+              className={buttonVariants({ size: "sm" })}
+            >
+              <HandCoins className="h-4 w-4 mr-2" />
+              Registrar cobro
+            </Link>
+          )}
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground">Saldo actual</p>
+            <p className={cn(
+              "text-3xl font-bold tabular-nums",
+              saldo > 0 ? "text-destructive" : saldo < 0 ? "text-green-600" : "text-foreground"
+            )}>
+              {formatearPesos(saldo)}
+            </p>
+            {saldo > 0 && <p className="text-xs text-destructive">Debe al negocio</p>}
+            {saldo < 0 && <p className="text-xs text-green-600">A favor del cliente</p>}
+            {saldo === 0 && <p className="text-xs text-muted-foreground">Sin saldo pendiente</p>}
+          </div>
         </div>
       </div>
 

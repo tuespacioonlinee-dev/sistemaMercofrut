@@ -20,6 +20,7 @@ import {
   Boxes,
   Receipt,
   CalendarClock,
+  HandCoins,
 } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
 
@@ -49,6 +50,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <NavLink href="/remitos" icon={<FileText />}>Remitos</NavLink>
           <NavLink href="/caja" icon={<Wallet />}>Caja diaria</NavLink>
           <NavLink href="/cuentas" icon={<CreditCard />}>Cuentas corrientes</NavLink>
+          <NavLink href="/cobros/nuevo" icon={<HandCoins />}>Registrar cobro</NavLink>
           <NavLink href="/facturacion" icon={<Receipt />}>Facturación</NavLink>
           <NavLink href="/reportes" icon={<BarChart2 />}>Reportes</NavLink>
 

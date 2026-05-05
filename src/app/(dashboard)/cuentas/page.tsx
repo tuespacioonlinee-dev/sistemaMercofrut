@@ -4,7 +4,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { etiquetasTipoCuenta } from "@/lib/validaciones/cuentas"
 import { formatearPesos } from "@/lib/utils"
-import { PlusCircle, Eye } from "lucide-react"
+import { PlusCircle, Eye, HandCoins } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export default async function CuentasPage() {
@@ -65,13 +65,24 @@ export default async function CuentasPage() {
                       {formatearPesos(saldo)}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Link
-                        href={`/cuentas/${cuenta.id}`}
-                        className={buttonVariants({ variant: "ghost", size: "sm" })}
-                      >
-                        <Eye className="h-4 w-4" />
-                        <span className="sr-only">Ver detalle</span>
-                      </Link>
+                      <div className="flex items-center justify-end gap-1">
+                        {cuenta.tipo === "CORRIENTE" && saldo > 0 && (
+                          <Link
+                            href={`/cobros/nuevo?cuentaId=${cuenta.id}`}
+                            className={buttonVariants({ variant: "outline", size: "sm" })}
+                          >
+                            <HandCoins className="h-4 w-4 mr-1" />
+                            Cobrar
+                          </Link>
+                        )}
+                        <Link
+                          href={`/cuentas/${cuenta.id}`}
+                          className={buttonVariants({ variant: "ghost", size: "sm" })}
+                        >
+                          <Eye className="h-4 w-4" />
+                          <span className="sr-only">Ver detalle</span>
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 )

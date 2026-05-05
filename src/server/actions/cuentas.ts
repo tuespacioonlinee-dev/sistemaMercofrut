@@ -3,6 +3,8 @@
 import { prisma } from "@/lib/prisma"
 import { esquemaCuenta } from "@/lib/validaciones/cuentas"
 import { revalidatePath } from "next/cache"
+import { auth } from "@/lib/auth"
+import { registrarMovimientoCajaEnTx } from "@/server/actions/caja"
 
 export async function obtenerCuentas() {
   return prisma.cuenta.findMany({
@@ -25,6 +27,116 @@ export async function obtenerCuentaPorId(id: string) {
       },
     },
   })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cobros y pagos
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function obtenerCuentasCorrientes() {
+  return prisma.cuenta.findMany({
+    where: { tipo: "CORRIENTE", titular: "CLIENTE", deletedAt: null, activa: true },
+    include: {
+      cliente: { select: { id: true, nombreRazonSocial: true } },
+    },
+    orderBy: [{ saldo: "desc" }, { nombre: "asc" }],
+  })
+}
+
+export async function registrarCobro(
+  cuentaId: string,
+  monto: number,
+  concepto: string
+) {
+  const session = await auth()
+  if (!session) return { error: "No autorizado" }
+  if (monto <= 0) return { error: "El monto debe ser mayor a 0" }
+  if (!concepto.trim()) return { error: "Ingresá un concepto" }
+
+  const cuenta = await prisma.cuenta.findUnique({ where: { id: cuentaId, deletedAt: null } })
+  if (!cuenta) return { error: "Cuenta no encontrada" }
+
+  const saldoAnterior = Number(cuenta.saldo)
+  const saldoPosterior = saldoAnterior - monto
+
+  await prisma.$transaction(async (tx) => {
+    await tx.movimientoCuenta.create({
+      data: {
+        cuentaId,
+        tipo: "HABER",
+        monto,
+        saldoAnterior,
+        saldoPosterior,
+        descripcion: concepto,
+        usuarioId: session.user.id,
+        origenTipo: "COBRO_CLIENTE",
+        origenId: cuentaId,
+      },
+    })
+    await tx.cuenta.update({ where: { id: cuentaId }, data: { saldo: saldoPosterior } })
+    await registrarMovimientoCajaEnTx(tx, {
+      tipo: "CC_HABER",
+      categoria: "COBRO_CLIENTE",
+      monto,
+      descripcion: `Cobro CC: ${concepto}`,
+      usuarioId: session.user.id,
+      origenTipo: "COBRO_CLIENTE",
+      origenId: cuentaId,
+    })
+  })
+
+  revalidatePath("/cuentas")
+  revalidatePath(`/cuentas/${cuentaId}`)
+  revalidatePath("/caja")
+  return { ok: true, cuentaId }
+}
+
+export async function registrarPago(
+  cuentaId: string,
+  monto: number,
+  concepto: string
+) {
+  const session = await auth()
+  if (!session) return { error: "No autorizado" }
+  if (monto <= 0) return { error: "El monto debe ser mayor a 0" }
+  if (!concepto.trim()) return { error: "Ingresá un concepto" }
+
+  const cuenta = await prisma.cuenta.findUnique({ where: { id: cuentaId, deletedAt: null } })
+  if (!cuenta) return { error: "Cuenta no encontrada" }
+
+  const saldoAnterior = Number(cuenta.saldo)
+  const saldoPosterior = saldoAnterior - monto
+
+  await prisma.$transaction(async (tx) => {
+    await tx.movimientoCuenta.create({
+      data: {
+        cuentaId,
+        tipo: "HABER",
+        monto,
+        saldoAnterior,
+        saldoPosterior,
+        descripcion: concepto,
+        usuarioId: session.user.id,
+        origenTipo: "PAGO_PROVEEDOR",
+        origenId: cuentaId,
+      },
+    })
+    await tx.cuenta.update({ where: { id: cuentaId }, data: { saldo: saldoPosterior } })
+    await registrarMovimientoCajaEnTx(tx, {
+      tipo: "CC_DEBE",
+      categoria: "PAGO_PROVEEDOR",
+      monto,
+      descripcion: `Pago prov: ${concepto}`,
+      usuarioId: session.user.id,
+      origenTipo: "PAGO_PROVEEDOR",
+      origenId: cuentaId,
+    })
+  })
+
+  revalidatePath("/cuentas")
+  revalidatePath(`/cuentas/${cuentaId}`)
+  revalidatePath("/caja")
+  return { ok: true, cuentaId }
 }
 
 export async function crearCuenta(formData: unknown) {
