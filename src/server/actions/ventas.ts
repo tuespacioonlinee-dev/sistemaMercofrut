@@ -212,7 +212,7 @@ export async function crearVenta(data: unknown) {
     remitoId     = remito.id
     remitoNumero = remito.numero
 
-    // ── 6. Movimiento de caja (solo venta contado) ────────────────────────
+    // ── 6. Movimiento de caja ─────────────────────────────────────────────
     if (condicion === "CONTADO") {
       await registrarMovimientoCajaEnTx(tx, {
         tipo:        "CONTADO_HABER",
@@ -223,8 +223,18 @@ export async function crearVenta(data: unknown) {
         origenTipo:  "venta",
         origenId:    venta.id,
       })
+    } else {
+      // Venta CC: queda asentada en columna DEBE (el cliente nos debe)
+      await registrarMovimientoCajaEnTx(tx, {
+        tipo:        "CC_DEBE",
+        categoria:   "COBRO_CLIENTE",
+        monto:       total,
+        descripcion: `Venta CC #${venta.numero}`,
+        usuarioId:   session.user.id,
+        origenTipo:  "venta",
+        origenId:    venta.id,
+      })
     }
-    // Venta CC: no toca caja, solo cuenta corriente (paso 4)
   })
 
   revalidatePath("/ventas")

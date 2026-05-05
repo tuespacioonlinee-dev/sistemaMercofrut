@@ -1,5 +1,6 @@
 import { obtenerCajaAbierta } from "@/server/actions/caja"
 import { abrirCaja, cerrarCaja, registrarMovimiento } from "@/server/actions/caja"
+import { obtenerCuentasConSaldo } from "@/server/actions/reportes"
 import { formatearPesos } from "@/lib/utils"
 import { cn } from "@/lib/utils"
 import { type TipoMovCaja, type CategoriaMovCaja, etiquetasCategoria } from "@/lib/validaciones/caja"
@@ -36,18 +37,24 @@ export default async function CajaPage() {
     )
   }
 
-  const movimientos = caja.movimientos
+  const [movimientos, cuentas] = [caja.movimientos, await obtenerCuentasConSaldo()]
 
   const sumar = (tipo: TipoMovCaja) =>
     movimientos.filter((m) => m.tipo === tipo).reduce((a, m) => a + Number(m.monto), 0)
 
-  const totalIngresos  = sumar("CONTADO_HABER")  // efectivo entra
-  const totalEgresos   = sumar("CONTADO_DEBE")   // efectivo sale
-  const totalHaber     = sumar("CC_HABER")        // cobros CC clientes
-  const totalDebe      = sumar("CC_DEBE")         // compras/pagos CC
+  const totalIngresos  = sumar("CONTADO_HABER")
+  const totalEgresos   = sumar("CONTADO_DEBE")
+  const totalHaber     = sumar("CC_HABER")
+  const totalDebe      = sumar("CC_DEBE")
 
-  const saldoCaja = Number(caja.saldoInicial) + totalIngresos - totalEgresos
-  const netoCC    = totalHaber - totalDebe
+  const saldoCaja     = Number(caja.saldoInicial) + totalIngresos - totalEgresos
+  const diferenciaCaja = totalIngresos - totalEgresos
+  const netoCC        = totalHaber - totalDebe
+
+  // Saldo total CTA CTE de todas las cuentas en la base
+  const saldoCtaCte = cuentas
+    .filter((c) => c.titular === "CLIENTE")
+    .reduce((acc, c) => acc + Number(c.saldo), 0)
 
   return (
     <div className="space-y-5">
@@ -93,7 +100,7 @@ export default async function CajaPage() {
       </div>
 
       {/* Saldos calculados */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="border rounded-lg p-4">
           <p className="text-xs text-muted-foreground mb-1">Saldo inicial</p>
           <p className="text-lg font-semibold">{formatearPesos(Number(caja.saldoInicial))}</p>
@@ -105,9 +112,29 @@ export default async function CajaPage() {
           </p>
         </div>
         <div className="border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-1">Neto cuenta corriente</p>
+          <p className="text-xs text-muted-foreground mb-1">Diferencia de caja</p>
+          <p className={cn("text-lg font-bold", diferenciaCaja >= 0 ? "text-green-700" : "text-destructive")}>
+            {diferenciaCaja >= 0 ? "+" : ""}{formatearPesos(diferenciaCaja)}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">Ingresos − Egresos del día</p>
+        </div>
+        <div className="border rounded-lg p-4">
+          <p className="text-xs text-muted-foreground mb-1">Neto CC del día</p>
           <p className={cn("text-lg font-bold", netoCC >= 0 ? "text-blue-700" : "text-orange-700")}>
             {formatearPesos(netoCC)}
+          </p>
+        </div>
+      </div>
+
+      {/* Saldo CTA CTE acumulado */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="border rounded-lg p-4 bg-blue-50/30">
+          <p className="text-xs text-muted-foreground mb-1">Saldo CTA CTE clientes (acumulado)</p>
+          <p className={cn("text-2xl font-bold", saldoCtaCte > 0 ? "text-destructive" : "text-green-700")}>
+            {formatearPesos(saldoCtaCte)}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {saldoCtaCte > 0 ? "Los clientes nos deben en total" : "Sin saldo pendiente"}
           </p>
         </div>
       </div>
