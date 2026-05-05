@@ -1,11 +1,14 @@
 import { obtenerResumenStock, obtenerComprasPorMes, obtenerLotesCriticos } from "@/server/actions/reportes"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { buttonVariants } from "@/components/ui/button"
 import {
   Package, TrendingDown, AlertTriangle, PackageX,
   ShoppingBag, Building2, CalendarClock, DollarSign,
+  Wallet, Users, Truck, CreditCard, ChevronRight,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import Link from "next/link"
 
 export const dynamic = "force-dynamic"
 
@@ -28,6 +31,26 @@ export default async function ReportesPage() {
         <h1 className="text-2xl font-bold">Reportes</h1>
         <p className="text-sm text-muted-foreground">Resumen operativo del sistema</p>
       </div>
+
+      {/* ── Accesos directos ──────────────────────────────── */}
+      <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {[
+          { href: "/reportes/caja",        icon: Wallet,      label: "Caja diaria",          desc: "Movimientos Ingresos/Egresos/Debe/Haber" },
+          { href: "/reportes/cuentas",     icon: CreditCard,  label: "CTA CTE",               desc: "Saldos y movimientos de cuentas" },
+          { href: "/reportes/clientes",    icon: Users,       label: "Clientes",              desc: "Listado y saldos de clientes" },
+          { href: "/reportes/proveedores", icon: Truck,       label: "Proveedores",           desc: "Listado y saldos de proveedores" },
+          { href: "/reportes/stock",       icon: Package,     label: "Stock",                 desc: "Ver tabla de stock más abajo" },
+        ].map(({ href, icon: Icon, label, desc }) => (
+          <Link key={href} href={href} className="border rounded-lg p-4 hover:bg-muted/30 transition-colors flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <Icon className="h-5 w-5 text-muted-foreground" />
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <p className="font-semibold text-sm">{label}</p>
+            <p className="text-xs text-muted-foreground leading-snug">{desc}</p>
+          </Link>
+        ))}
+      </section>
 
       {/* ── KPIs de stock ──────────────────────────────── */}
       <section className="space-y-3">

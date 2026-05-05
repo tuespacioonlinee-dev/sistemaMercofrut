@@ -105,6 +105,84 @@ export async function obtenerComprasPorMes(meses = 6) {
   return { mesesData, proveedoresData, totalPeriodo, totalCompras: compras.length }
 }
 
+export async function obtenerReporteCaja(cajaId?: string) {
+  const caja = cajaId
+    ? await prisma.cajaDiaria.findUnique({ where: { id: cajaId } })
+    : await prisma.cajaDiaria.findFirst({ where: { estado: "ABIERTA" }, orderBy: { fechaApertura: "desc" } })
+        ?? await prisma.cajaDiaria.findFirst({ where: { estado: "CERRADA" }, orderBy: { fechaApertura: "desc" } })
+
+  if (!caja) return null
+
+  const movimientos = await prisma.movimientoCaja.findMany({
+    where: { cajaId: caja.id, deletedAt: null },
+    include: { usuario: { select: { nombre: true } } },
+    orderBy: { fecha: "asc" },
+  })
+
+  const sumar = (tipo: string) =>
+    movimientos.filter((m) => m.tipo === tipo).reduce((acc, m) => acc + Number(m.monto), 0)
+
+  return {
+    caja,
+    movimientos: movimientos.map((m) => ({ ...m, monto: Number(m.monto) })),
+    totalIngresos: sumar("CONTADO_HABER"),
+    totalEgresos:  sumar("CONTADO_DEBE"),
+    totalDebe:     sumar("CC_DEBE"),
+    totalHaber:    sumar("CC_HABER"),
+  }
+}
+
+export async function obtenerCajasList() {
+  return prisma.cajaDiaria.findMany({
+    orderBy: { fechaApertura: "desc" },
+    take: 60,
+    include: {
+      abiertaPor: { select: { nombre: true } },
+      cerradaPor: { select: { nombre: true } },
+    },
+  })
+}
+
+export async function obtenerMovimientosCuenta(cuentaId: string) {
+  return prisma.movimientoCuenta.findMany({
+    where: { cuentaId },
+    include: { usuario: { select: { nombre: true } } },
+    orderBy: { fecha: "desc" },
+    take: 200,
+  })
+}
+
+export async function obtenerCuentasConSaldo() {
+  return prisma.cuenta.findMany({
+    where: { deletedAt: null, activa: true },
+    include: {
+      cliente: { select: { id: true, nombreRazonSocial: true } },
+      proveedor: { select: { id: true, nombreRazonSocial: true } },
+    },
+    orderBy: [{ titular: "asc" }, { saldo: "desc" }],
+  })
+}
+
+export async function obtenerReporteClientes() {
+  return prisma.cliente.findMany({
+    where: { deletedAt: null },
+    include: {
+      cuentas: { where: { deletedAt: null }, select: { saldo: true, tipo: true } },
+    },
+    orderBy: { nombreRazonSocial: "asc" },
+  })
+}
+
+export async function obtenerReporteProveedores() {
+  return prisma.proveedor.findMany({
+    where: { deletedAt: null },
+    include: {
+      cuentas: { where: { deletedAt: null }, select: { saldo: true, tipo: true } },
+    },
+    orderBy: { nombreRazonSocial: "asc" },
+  })
+}
+
 export async function obtenerLotesCriticos() {
   const lotes = await prisma.loteProducto.findMany({
     where: { activo: true },

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { compraSchema } from "@/lib/validaciones/compras"
+import { registrarMovimientoCajaEnTx } from "@/server/actions/caja"
 
 export async function crearCompra(data: unknown) {
   const session = await auth()
@@ -105,7 +106,39 @@ export async function crearCompra(data: unknown) {
       }
     }
 
-    // 3. Si es a cuenta corriente, registrar en la cuenta del proveedor
+    // 3. Registrar en caja diaria
+    const proveedor = await tx.proveedor.findUnique({
+      where: { id: cabecera.proveedorId },
+      select: { nombreRazonSocial: true },
+    })
+    const nombreProv = proveedor?.nombreRazonSocial ?? "Proveedor"
+    const concepto = cabecera.numeroComprobante
+      ? `Compra ${nombreProv} — ${cabecera.numeroComprobante}`
+      : `Compra ${nombreProv}`
+
+    if (cabecera.condicion === "CONTADO") {
+      await registrarMovimientoCajaEnTx(tx, {
+        tipo: "CONTADO_DEBE",
+        categoria: "COMPRA_CONTADO",
+        monto: total,
+        descripcion: concepto,
+        usuarioId: session.user.id,
+        origenTipo: "compra",
+        origenId: compra.id,
+      })
+    } else {
+      await registrarMovimientoCajaEnTx(tx, {
+        tipo: "CC_DEBE",
+        categoria: "PAGO_PROVEEDOR",
+        monto: total,
+        descripcion: concepto,
+        usuarioId: session.user.id,
+        origenTipo: "compra",
+        origenId: compra.id,
+      })
+    }
+
+    // 4. Si es a cuenta corriente, registrar en la cuenta del proveedor
     if (cabecera.condicion === "CUENTA_CORRIENTE") {
       let cuenta = await tx.cuenta.findFirst({
         where: { proveedorId: cabecera.proveedorId, tipo: "CORRIENTE" },

@@ -62,6 +62,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             Stock y compras
           </p>
           <NavLink href="/stock" icon={<Boxes />}>Stock</NavLink>
+          <NavLink href="/stock" icon={<Package />}>Ajuste de mercaderías</NavLink>
           <NavLink href="/lotes" icon={<CalendarClock />}>Lotes / Vencimientos</NavLink>
           <NavLink href="/productos" icon={<Package />}>Productos</NavLink>
           <NavLink href="/categorias" icon={<Tag />}>Categorías</NavLink>
