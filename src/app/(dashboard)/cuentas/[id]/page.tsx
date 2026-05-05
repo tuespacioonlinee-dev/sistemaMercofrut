@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { etiquetasTipoCuenta } from "@/lib/validaciones/cuentas"
 import { formatearPesos } from "@/lib/utils"
-import { ChevronLeft, HandCoins } from "lucide-react"
+import { ChevronLeft, HandCoins, Wallet } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface Props {
@@ -41,20 +41,31 @@ export default async function DetalleCuentaPage({ params }: Props) {
       {/* Encabezado con resumen */}
       <div className="flex items-start justify-between">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold">{cuenta.cliente?.nombreRazonSocial ?? "Cuenta"}</h1>
+          <h1 className="text-2xl font-bold">
+            {cuenta.cliente?.nombreRazonSocial ?? cuenta.proveedor?.nombreRazonSocial ?? "Cuenta"}
+          </h1>
           <div className="flex items-center gap-2">
             <Badge variant="secondary">{etiquetasTipoCuenta[cuenta.tipo]}</Badge>
             <span className="text-sm text-muted-foreground">{cuenta.nombre}</span>
           </div>
         </div>
         <div className="flex flex-col items-end gap-3">
-          {cuenta.tipo === "CORRIENTE" && (
+          {cuenta.tipo === "CORRIENTE" && cuenta.titular === "CLIENTE" && (
             <Link
               href={`/cobros/nuevo?cuentaId=${cuenta.id}`}
               className={buttonVariants({ size: "sm" })}
             >
               <HandCoins className="h-4 w-4 mr-2" />
               Registrar cobro
+            </Link>
+          )}
+          {cuenta.tipo === "CORRIENTE" && cuenta.titular === "PROVEEDOR" && (
+            <Link
+              href={`/pagos/nuevo?cuentaId=${cuenta.id}`}
+              className={buttonVariants({ size: "sm" })}
+            >
+              <Wallet className="h-4 w-4 mr-2" />
+              Registrar pago
             </Link>
           )}
           <div className="text-right">
@@ -65,8 +76,16 @@ export default async function DetalleCuentaPage({ params }: Props) {
             )}>
               {formatearPesos(saldo)}
             </p>
-            {saldo > 0 && <p className="text-xs text-destructive">Debe al negocio</p>}
-            {saldo < 0 && <p className="text-xs text-green-600">A favor del cliente</p>}
+            {saldo > 0 && (
+              <p className="text-xs text-destructive">
+                {cuenta.titular === "PROVEEDOR" ? "Le debemos" : "Debe al negocio"}
+              </p>
+            )}
+            {saldo < 0 && (
+              <p className="text-xs text-green-600">
+                {cuenta.titular === "PROVEEDOR" ? "A nuestro favor" : "A favor del cliente"}
+              </p>
+            )}
             {saldo === 0 && <p className="text-xs text-muted-foreground">Sin saldo pendiente</p>}
           </div>
         </div>

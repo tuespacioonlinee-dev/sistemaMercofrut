@@ -11,6 +11,7 @@ export async function obtenerCuentas() {
     where: { deletedAt: null },
     include: {
       cliente: { select: { nombreRazonSocial: true } },
+      proveedor: { select: { nombreRazonSocial: true } },
     },
     orderBy: { createdAt: "desc" },
   })
@@ -21,11 +22,22 @@ export async function obtenerCuentaPorId(id: string) {
     where: { id, deletedAt: null },
     include: {
       cliente: { select: { id: true, nombreRazonSocial: true, documento: true } },
+      proveedor: { select: { id: true, nombreRazonSocial: true, documento: true } },
       movimientos: {
         orderBy: { fecha: "desc" },
         take: 50,
       },
     },
+  })
+}
+
+export async function obtenerCuentasProveedores() {
+  return prisma.cuenta.findMany({
+    where: { tipo: "CORRIENTE", titular: "PROVEEDOR", deletedAt: null, activa: true },
+    include: {
+      proveedor: { select: { id: true, nombreRazonSocial: true } },
+    },
+    orderBy: [{ saldo: "desc" }, { nombre: "asc" }],
   })
 }
 

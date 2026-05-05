@@ -51,6 +51,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <NavLink href="/caja" icon={<Wallet />}>Caja diaria</NavLink>
           <NavLink href="/cuentas" icon={<CreditCard />}>Cuentas corrientes</NavLink>
           <NavLink href="/cobros/nuevo" icon={<HandCoins />}>Registrar cobro</NavLink>
+          <NavLink href="/pagos/nuevo" icon={<Wallet />}>Pagar a proveedor</NavLink>
           <NavLink href="/facturacion" icon={<Receipt />}>Facturación</NavLink>
           <NavLink href="/reportes" icon={<BarChart2 />}>Reportes</NavLink>
 
