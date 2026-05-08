@@ -178,6 +178,42 @@ export async function obtenerReporteStockDiario(cajaId?: string): Promise<{
   return { caja, filas }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Reporte Stock Resumido (versión condensada del diario)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type FilaStockResumido = {
+  productoId:    string
+  codigo:        string
+  descripcion:   string
+  presentacion:  string
+  stockInicial:  number
+  totalEgresos:  number
+  totalIngresos: number
+  stockFinal:    number
+}
+
+export async function obtenerReporteStockResumido(cajaId?: string): Promise<{
+  caja:  CajaParaReporte
+  filas: FilaStockResumido[]
+} | null> {
+  const diario = await obtenerReporteStockDiario(cajaId)
+  if (!diario) return null
+
+  const filas: FilaStockResumido[] = diario.filas.map((f) => ({
+    productoId:   f.productoId,
+    codigo:       f.codigo,
+    descripcion:  f.descripcion,
+    presentacion: f.presentacion,
+    stockInicial: f.stockInicial,
+    totalEgresos: f.totalEgresos,
+    totalIngresos:f.totalIngresos,
+    stockFinal:   f.stockFinal,
+  }))
+
+  return { caja: diario.caja, filas }
+}
+
 export async function obtenerResumenStock() {
   const productos = await prisma.producto.findMany({
     where: { activo: true, deletedAt: null },
