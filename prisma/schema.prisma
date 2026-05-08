@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ============================================================================
@@ -143,6 +144,9 @@ enum TipoMovimientoStock {
   AJUSTE_NEGATIVO
   DEVOLUCION_CLIENTE
   DEVOLUCION_PROVEEDOR
+  EGRESO_MERMA
+  EGRESO_FALTANTE
+  INGRESO_SOBRANTE
 }
 
 model MovimientoStock {
@@ -189,15 +193,19 @@ enum TipoDocumento {
 
 model Cliente {
   id                String        @id @default(cuid())
+  codigo            String?       @unique
   nombreRazonSocial String
   tipoDocumento     TipoDocumento @default(DNI)
   documento         String        @unique
   condicionIva      CondicionIva  @default(CONSUMIDOR_FINAL)
   direccion         String?
   localidad         String?
+  provincia         String?
   telefono          String?
   email             String?
   observaciones     String?
+  maxCredito        Decimal?      @db.Decimal(14, 2)
+  saldoInicial      Decimal       @db.Decimal(14, 2) @default(0)
   activo            Boolean       @default(true)
 
   createdAt DateTime  @default(now())
@@ -213,15 +221,18 @@ model Cliente {
 
 model Proveedor {
   id                String        @id @default(cuid())
+  codigo            String?       @unique
   nombreRazonSocial String
   tipoDocumento     TipoDocumento @default(CUIT)
   documento         String        @unique
   condicionIva      CondicionIva  @default(RESPONSABLE_INSCRIPTO)
   direccion         String?
   localidad         String?
+  provincia         String?
   telefono          String?
   email             String?
   observaciones     String?
+  saldoInicial      Decimal       @db.Decimal(14, 2) @default(0)
   activo            Boolean       @default(true)
 
   createdAt DateTime  @default(now())
@@ -313,6 +324,7 @@ enum EstadoCaja {
 
 model CajaDiaria {
   id            String     @id @default(cuid())
+  numero        Int        @unique @default(autoincrement())
   fechaApertura DateTime   @default(now())
   fechaCierre   DateTime?
   saldoInicial  Decimal    @db.Decimal(14, 2)
