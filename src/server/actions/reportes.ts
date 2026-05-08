@@ -354,6 +354,227 @@ export async function obtenerCajasList() {
   })
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Grupo D — Consulta CTA CTE por persona
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TipoPersona = "CLIENTE" | "PROVEEDOR"
+
+export type PersonaResumen = {
+  id:          string
+  tipo:        TipoPersona
+  codigo:      string | null
+  nombre:      string
+  cuit:        string
+  localidad:   string | null
+  provincia:   string | null
+  maxCredito:  number | null
+  saldo:       number
+  saldoInicial:number
+  cuentaId:    string | null
+}
+
+export type FilaMovimientoCuenta = {
+  id:            string
+  fecha:          string
+  tipo:           string
+  tipoComprobante:string
+  numero:         string | null
+  descripcion:    string
+  debe:           number
+  haber:          number
+  saldoAcumulado: number
+  origenTipo:     string | null
+  origenId:       string | null
+}
+
+export type FiltroMovCC =
+  | "TOTALES"
+  | "COMPROBANTES"
+  | "NO_SALDADOS"
+  | "SALDADOS"
+  | "PAGOS"
+
+// Búsqueda de personas (debounce en el cliente)
+export async function buscarPersonas(q: string): Promise<PersonaResumen[]> {
+  const term = q.trim().toLowerCase()
+  if (term.length < 1) return []
+
+  const [clientes, proveedores] = await Promise.all([
+    prisma.cliente.findMany({
+      where: {
+        deletedAt: null,
+        activo: true,
+        OR: [
+          { nombreRazonSocial: { contains: term, mode: "insensitive" } },
+          { documento:         { contains: term } },
+          { codigo:            { contains: term } },
+        ],
+      },
+      select: {
+        id: true, codigo: true, nombreRazonSocial: true, documento: true,
+        localidad: true, provincia: true, maxCredito: true, saldoInicial: true,
+        cuentas: {
+          where: { deletedAt: null, tipo: "CORRIENTE" },
+          select: { id: true, saldo: true },
+          take: 1,
+        },
+      },
+      take: 20,
+    }),
+    prisma.proveedor.findMany({
+      where: {
+        deletedAt: null,
+        activo: true,
+        OR: [
+          { nombreRazonSocial: { contains: term, mode: "insensitive" } },
+          { documento:         { contains: term } },
+          { codigo:            { contains: term } },
+        ],
+      },
+      select: {
+        id: true, codigo: true, nombreRazonSocial: true, documento: true,
+        localidad: true, provincia: true, saldoInicial: true,
+        cuentas: {
+          where: { deletedAt: null, tipo: "CORRIENTE" },
+          select: { id: true, saldo: true },
+          take: 1,
+        },
+      },
+      take: 20,
+    }),
+  ])
+
+  const clientesRes: PersonaResumen[] = clientes.map((c) => ({
+    id:           c.id,
+    tipo:         "CLIENTE" as TipoPersona,
+    codigo:       c.codigo,
+    nombre:       c.nombreRazonSocial,
+    cuit:         c.documento,
+    localidad:    c.localidad,
+    provincia:    c.provincia,
+    maxCredito:   c.maxCredito != null ? Number(c.maxCredito) : null,
+    saldo:        c.cuentas[0] ? Number(c.cuentas[0].saldo) : 0,
+    saldoInicial: Number(c.saldoInicial),
+    cuentaId:     c.cuentas[0]?.id ?? null,
+  }))
+
+  const provRes: PersonaResumen[] = proveedores.map((p) => ({
+    id:           p.id,
+    tipo:         "PROVEEDOR" as TipoPersona,
+    codigo:       p.codigo,
+    nombre:       p.nombreRazonSocial,
+    cuit:         p.documento,
+    localidad:    p.localidad,
+    provincia:    p.provincia,
+    maxCredito:   null,
+    saldo:        p.cuentas[0] ? Number(p.cuentas[0].saldo) : 0,
+    saldoInicial: Number(p.saldoInicial),
+    cuentaId:     p.cuentas[0]?.id ?? null,
+  }))
+
+  return [...clientesRes, ...provRes].sort((a, b) =>
+    a.nombre.localeCompare(b.nombre, "es-AR"),
+  )
+}
+
+// Movimientos de una cuenta con filtro
+export async function obtenerMovimientosCtaCte(
+  cuentaId: string,
+  filtro: FiltroMovCC,
+): Promise<FilaMovimientoCuenta[]> {
+  const movs = await prisma.movimientoCuenta.findMany({
+    where: { cuentaId },
+    orderBy: { fecha: "asc" },
+    select: {
+      id: true, fecha: true, tipo: true, monto: true,
+      saldoAnterior: true, saldoPosterior: true,
+      descripcion: true, origenTipo: true, origenId: true,
+    },
+  })
+
+  // Construir filas base con saldo acumulado
+  const filas: FilaMovimientoCuenta[] = movs.map((m) => {
+    const debe  = m.tipo === "DEBE"  ? Number(m.monto) : 0
+    const haber = m.tipo === "HABER" ? Number(m.monto) : 0
+    const ajuste = m.tipo === "AJUSTE" ? Number(m.monto) : 0
+
+    // Derivar tipo de comprobante desde origenTipo
+    const tipoComprobante = (() => {
+      if (m.origenTipo === "venta")   return "Venta"
+      if (m.origenTipo === "compra")  return "Compra"
+      if (m.origenTipo === "cobro")   return "Cobro"
+      if (m.origenTipo === "pago")    return "Pago"
+      if (m.origenTipo === "ajuste")  return "Ajuste"
+      return m.origenTipo ?? "Manual"
+    })()
+
+    return {
+      id:             m.id,
+      fecha:          m.fecha.toISOString(),
+      tipo:           m.tipo,
+      tipoComprobante,
+      numero:         m.origenId ?? null,
+      descripcion:    m.descripcion,
+      debe,
+      haber: haber + ajuste,
+      saldoAcumulado: Number(m.saldoPosterior),
+      origenTipo:     m.origenTipo,
+      origenId:       m.origenId,
+    }
+  })
+
+  // Aplicar filtro
+  switch (filtro) {
+    case "TOTALES":
+      return filas
+
+    case "COMPROBANTES":
+      // Solo movimientos originados en ventas/compras/remitos/facturas
+      return filas.filter((f) =>
+        ["venta", "compra", "remito", "factura"].includes(f.origenTipo ?? ""),
+      )
+
+    case "NO_SALDADOS": {
+      // Comprobantes con saldo pendiente > 0:
+      // Son las ventas/compras donde todavía hay debe > haber
+      const comps = filas.filter((f) =>
+        ["venta", "compra"].includes(f.origenTipo ?? ""),
+      )
+      // Agrupar por origenId y sumar debe - haber; mostrar los con saldo > 0
+      const saldosPorId = new Map<string, number>()
+      for (const f of filas) {
+        if (!f.origenId) continue
+        const actual = saldosPorId.get(f.origenId) ?? 0
+        saldosPorId.set(f.origenId, actual + f.debe - f.haber)
+      }
+      return comps.filter((f) => f.origenId && (saldosPorId.get(f.origenId) ?? 0) > 0.005)
+    }
+
+    case "SALDADOS": {
+      const comps = filas.filter((f) =>
+        ["venta", "compra"].includes(f.origenTipo ?? ""),
+      )
+      const saldosPorId = new Map<string, number>()
+      for (const f of filas) {
+        if (!f.origenId) continue
+        const actual = saldosPorId.get(f.origenId) ?? 0
+        saldosPorId.set(f.origenId, actual + f.debe - f.haber)
+      }
+      return comps.filter((f) => f.origenId && Math.abs(saldosPorId.get(f.origenId) ?? 0) < 0.005)
+    }
+
+    case "PAGOS":
+      return filas.filter((f) =>
+        ["cobro", "pago"].includes(f.origenTipo ?? "") ||
+        f.tipo === "HABER",
+      )
+
+    default:
+      return filas
+  }
+}
+
 export async function obtenerMovimientosCuenta(cuentaId: string) {
   return prisma.movimientoCuenta.findMany({
     where: { cuentaId },
