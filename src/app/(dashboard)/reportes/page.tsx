@@ -39,7 +39,8 @@ export default async function ReportesPage() {
           { href: "/reportes/cuentas",     icon: CreditCard,  label: "CTA CTE",               desc: "Saldos y movimientos de cuentas" },
           { href: "/reportes/clientes",    icon: Users,       label: "Clientes",              desc: "Listado y saldos de clientes" },
           { href: "/reportes/proveedores", icon: Truck,       label: "Proveedores",           desc: "Listado y saldos de proveedores" },
-          { href: "/reportes/stock",       icon: Package,     label: "Stock",                 desc: "Ver tabla de stock más abajo" },
+          { href: "/reportes/stock",         icon: Package,     label: "Stock diario",          desc: "Movimientos del día por producto" },
+          { href: "/reportes/stock-resumido", icon: Package,   label: "Stock resumido",        desc: "Totales egresos/ingresos por producto" },
         ].map(({ href, icon: Icon, label, desc }) => (
           <Link key={href} href={href} className="border rounded-lg p-4 hover:bg-muted/30 transition-colors flex flex-col gap-2">
             <div className="flex items-center justify-between">

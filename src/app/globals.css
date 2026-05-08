@@ -128,3 +128,26 @@
     @apply font-sans;
   }
 }
+
+/* ─── Estilos de impresión ───────────────────────────────────── */
+@media print {
+  aside,
+  [data-no-print] {
+    display: none !important;
+  }
+  main {
+    margin-left: 0 !important;
+    padding: 0 !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  table {
+    border-collapse: collapse;
+  }
+  th,
+  td {
+    border: 1px solid #ccc;
+  }
+}

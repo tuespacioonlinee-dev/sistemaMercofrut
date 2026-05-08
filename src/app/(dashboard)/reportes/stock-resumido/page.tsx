@@ -1,6 +1,6 @@
-import { obtenerCajasParaSelector, obtenerReporteStockDiario } from "@/server/actions/reportes"
-import { TablaStockDiario } from "./TablaStockDiario"
-import { SelectorCaja } from "./SelectorCaja"
+import { obtenerCajasParaSelector, obtenerReporteStockResumido } from "@/server/actions/reportes"
+import { TablaStockResumido } from "./TablaStockResumido"
+import { SelectorCaja } from "../stock/SelectorCaja"
 import { ChevronLeft } from "lucide-react"
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -12,17 +12,16 @@ interface Props {
   searchParams: Promise<{ cajaId?: string }>
 }
 
-export default async function ReporteStockDiarioPage({ searchParams }: Props) {
+export default async function ReporteStockResumidoPage({ searchParams }: Props) {
   const { cajaId } = await searchParams
 
   const [cajas, reporte] = await Promise.all([
     obtenerCajasParaSelector(),
-    obtenerReporteStockDiario(cajaId),
+    obtenerReporteStockResumido(cajaId),
   ])
 
   return (
     <div className="space-y-5">
-      {/* Navegación */}
       <div className="flex items-center justify-between flex-wrap gap-3" data-no-print>
         <Link
           href="/reportes"
@@ -45,7 +44,7 @@ export default async function ReporteStockDiarioPage({ searchParams }: Props) {
           </p>
         </div>
       ) : (
-        <TablaStockDiario caja={reporte.caja} filas={reporte.filas} />
+        <TablaStockResumido caja={reporte.caja} filas={reporte.filas} />
       )}
     </div>
   )
