@@ -6,6 +6,7 @@ import { cerrarLote } from "@/server/actions/lotes"
 import { Button } from "@/components/ui/button"
 import { XCircle } from "lucide-react"
 import { toast } from "sonner"
+import { submitSeguro } from "@/lib/submit-helpers"
 
 export function CerrarLoteButton({ id }: { id: string }) {
   const [isPending, startTransition] = useTransition()
@@ -14,11 +15,10 @@ export function CerrarLoteButton({ id }: { id: string }) {
   function handleCerrar() {
     if (!confirm("¿Cerrar este lote? Ya no aparecerá en el listado activo.")) return
     startTransition(async () => {
-      const res = await cerrarLote(id)
-      if (res.ok) {
-        toast.success("Lote cerrado.")
-        router.refresh()
-      }
+      const res = await submitSeguro(() => cerrarLote(id))
+      if (!res.ok) { toast.error(res.error); return }
+      toast.success("Lote cerrado.")
+      router.refresh()
     })
   }
 

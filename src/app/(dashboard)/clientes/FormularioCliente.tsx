@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
+import { submitSeguro } from "@/lib/submit-helpers"
 
 interface Props {
   valoresIniciales?: Partial<DatosCliente>
@@ -66,16 +67,14 @@ export function FormularioCliente({ valoresIniciales, onSubmit, modoEdicion = fa
 
   async function procesarEnvio(data: DatosCliente) {
     setGuardando(true)
-    const resultado = await onSubmit(data)
-    setGuardando(false)
-
-    if (resultado.error) {
-      toast.error(resultado.error)
-      return
+    try {
+      const res = await submitSeguro(() => onSubmit(data))
+      if (!res.ok) { toast.error(res.error); return }
+      toast.success(modoEdicion ? "Cliente actualizado correctamente." : "Cliente creado correctamente.")
+      router.push("/clientes")
+    } finally {
+      setGuardando(false)
     }
-
-    toast.success(modoEdicion ? "Cliente actualizado correctamente." : "Cliente creado correctamente.")
-    router.push("/clientes")
   }
 
   return (

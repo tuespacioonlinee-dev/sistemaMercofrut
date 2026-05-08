@@ -9,6 +9,7 @@ import type { Proveedor } from "@prisma/client"
 import { CondicionIva, TipoDocumento } from "@prisma/client"
 import { proveedorSchema, type ProveedorInput } from "@/lib/validaciones/proveedores"
 import { crearProveedor, editarProveedor } from "@/server/actions/proveedores"
+import { submitSeguro } from "@/lib/submit-helpers"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -72,15 +73,10 @@ export function FormProveedor({ proveedor }: Props) {
 
   function onSubmit(data: ProveedorInput) {
     startTransition(async () => {
-      const res = proveedor
-        ? await editarProveedor(proveedor.id, data)
-        : await crearProveedor(data)
-
-      if (res.error) {
-        toast.error(res.error)
-        return
-      }
-
+      const res = await submitSeguro(() =>
+        proveedor ? editarProveedor(proveedor.id, data) : crearProveedor(data)
+      )
+      if (!res.ok) { toast.error(res.error); return }
       toast.success(proveedor ? "Proveedor actualizado" : "Proveedor creado")
       router.push("/proveedores")
     })

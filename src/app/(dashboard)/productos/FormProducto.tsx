@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import type { Categoria, UnidadMedida, Producto } from "@prisma/client"
 import { productoSchema, type ProductoInput } from "@/lib/validaciones/productos"
 import { crearProducto, editarProducto } from "@/server/actions/productos"
+import { submitSeguro } from "@/lib/submit-helpers"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -61,15 +62,10 @@ export function FormProducto({ categorias, unidades, producto }: Props) {
 
   function onSubmit(data: ProductoInput) {
     startTransition(async () => {
-      const res = producto
-        ? await editarProducto(producto.id, data)
-        : await crearProducto(data)
-
-      if (res.error) {
-        toast.error(res.error)
-        return
-      }
-
+      const res = await submitSeguro(() =>
+        producto ? editarProducto(producto.id, data) : crearProducto(data)
+      )
+      if (!res.ok) { toast.error(res.error); return }
       toast.success(producto ? "Producto actualizado" : "Producto creado")
       router.push("/productos")
     })
