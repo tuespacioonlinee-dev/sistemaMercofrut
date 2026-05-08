@@ -374,6 +374,87 @@ export async function obtenerCuentasConSaldo() {
   })
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Listados de clientes y proveedores (Grupo C)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type FilaListadoPersona = {
+  id:           string
+  codigo:       string | null
+  nombre:       string
+  cuit:         string
+  direccion:    string | null
+  localidad:    string | null
+  telefono:     string | null
+  saldo:        number
+}
+
+export async function obtenerListadoClientes(soloConSaldo = false): Promise<FilaListadoPersona[]> {
+  const clientes = await prisma.cliente.findMany({
+    where: { deletedAt: null, activo: true },
+    select: {
+      id:               true,
+      codigo:           true,
+      nombreRazonSocial:true,
+      documento:        true,
+      direccion:        true,
+      localidad:        true,
+      telefono:         true,
+      cuentas: {
+        where: { deletedAt: null, tipo: "CORRIENTE" },
+        select: { saldo: true },
+      },
+    },
+    orderBy: { nombreRazonSocial: "asc" },
+  })
+
+  const filas: FilaListadoPersona[] = clientes.map((c) => ({
+    id:        c.id,
+    codigo:    c.codigo,
+    nombre:    c.nombreRazonSocial,
+    cuit:      c.documento,
+    direccion: c.direccion,
+    localidad: c.localidad,
+    telefono:  c.telefono,
+    saldo:     c.cuentas.reduce((acc, cu) => acc + Number(cu.saldo), 0),
+  }))
+
+  return soloConSaldo ? filas.filter((f) => f.saldo !== 0) : filas
+}
+
+export async function obtenerListadoProveedores(soloConSaldo = false): Promise<FilaListadoPersona[]> {
+  const proveedores = await prisma.proveedor.findMany({
+    where: { deletedAt: null, activo: true },
+    select: {
+      id:               true,
+      codigo:           true,
+      nombreRazonSocial:true,
+      documento:        true,
+      direccion:        true,
+      localidad:        true,
+      telefono:         true,
+      cuentas: {
+        where: { deletedAt: null, tipo: "CORRIENTE" },
+        select: { saldo: true },
+      },
+    },
+    orderBy: { nombreRazonSocial: "asc" },
+  })
+
+  const filas: FilaListadoPersona[] = proveedores.map((p) => ({
+    id:        p.id,
+    codigo:    p.codigo,
+    nombre:    p.nombreRazonSocial,
+    cuit:      p.documento,
+    direccion: p.direccion,
+    localidad: p.localidad,
+    telefono:  p.telefono,
+    saldo:     p.cuentas.reduce((acc, cu) => acc + Number(cu.saldo), 0),
+  }))
+
+  return soloConSaldo ? filas.filter((f) => f.saldo !== 0) : filas
+}
+
 export async function obtenerReporteClientes() {
   return prisma.cliente.findMany({
     where: { deletedAt: null },
