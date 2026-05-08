@@ -1,7 +1,182 @@
 "use server"
 
 import { prisma } from "@/lib/prisma"
-import { differenceInDays, isPast, startOfMonth, endOfMonth, subMonths } from "date-fns"
+import { differenceInDays, isPast, startOfMonth, subMonths } from "date-fns"
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tipos exportados para reportes de stock
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type FilaStockDiario = {
+  productoId: string
+  codigo: string
+  descripcion: string
+  presentacion: string
+  stockInicial: number
+  // EGRESOS
+  egresosVta: number
+  egresosMerma: number
+  egresosFaltante: number
+  egresosSobra: number
+  egresosOtros: number
+  totalEgresos: number
+  // INGRESOS
+  ingresosCompra: number
+  ingresosMerma: number
+  ingresosFaltante: number
+  ingresosSobrante: number
+  ingresosOtro: number
+  totalIngresos: number
+  stockFinal: number
+}
+
+export type CajaParaReporte = {
+  id: string
+  numero: number
+  fechaApertura: string
+  fechaCierre: string | null
+  estado: "ABIERTA" | "CERRADA"
+  abiertaPorNombre: string
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cajas para selector
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function obtenerCajasParaSelector(): Promise<CajaParaReporte[]> {
+  const cajas = await prisma.cajaDiaria.findMany({
+    orderBy: { numero: "desc" },
+    take: 90,
+    include: { abiertaPor: { select: { nombre: true } } },
+  })
+  return cajas.map((c) => ({
+    id: c.id,
+    numero: c.numero,
+    fechaApertura: c.fechaApertura.toISOString(),
+    fechaCierre: c.fechaCierre?.toISOString() ?? null,
+    estado: c.estado as "ABIERTA" | "CERRADA",
+    abiertaPorNombre: c.abiertaPor.nombre,
+  }))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reporte Diario de Stock
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function obtenerReporteStockDiario(cajaId?: string): Promise<{
+  caja: CajaParaReporte
+  filas: FilaStockDiario[]
+} | null> {
+  // 1. Buscar caja
+  const cajaRaw = cajaId
+    ? await prisma.cajaDiaria.findUnique({
+        where: { id: cajaId },
+        include: { abiertaPor: { select: { nombre: true } } },
+      })
+    : await prisma.cajaDiaria.findFirst({
+        where: { estado: "ABIERTA" },
+        orderBy: { numero: "desc" },
+        include: { abiertaPor: { select: { nombre: true } } },
+      }) ??
+      await prisma.cajaDiaria.findFirst({
+        where: { estado: "CERRADA" },
+        orderBy: { numero: "desc" },
+        include: { abiertaPor: { select: { nombre: true } } },
+      })
+
+  if (!cajaRaw) return null
+
+  const caja: CajaParaReporte = {
+    id: cajaRaw.id,
+    numero: cajaRaw.numero,
+    fechaApertura: cajaRaw.fechaApertura.toISOString(),
+    fechaCierre: cajaRaw.fechaCierre?.toISOString() ?? null,
+    estado: cajaRaw.estado as "ABIERTA" | "CERRADA",
+    abiertaPorNombre: cajaRaw.abiertaPor.nombre,
+  }
+
+  const desde = cajaRaw.fechaApertura
+  const hasta = cajaRaw.fechaCierre ?? new Date()
+
+  // 2. Productos activos
+  const productos = await prisma.producto.findMany({
+    where: { activo: true, deletedAt: null },
+    select: {
+      id: true,
+      codigo: true,
+      nombre: true,
+      stockTotal: true,
+      unidadBase: { select: { abreviatura: true } },
+    },
+    orderBy: { nombre: "asc" },
+  })
+
+  // 3. Movimientos del período
+  const movimientos = await prisma.movimientoStock.findMany({
+    where: { fecha: { gte: desde, lte: hasta } },
+    orderBy: { fecha: "asc" },
+  })
+
+  // 4. Agrupar movimientos por producto
+  const movsByProducto = new Map<string, typeof movimientos>()
+  for (const m of movimientos) {
+    const lista = movsByProducto.get(m.productoId) ?? []
+    lista.push(m)
+    movsByProducto.set(m.productoId, lista)
+  }
+
+  // 5. Construir filas
+  const filas: FilaStockDiario[] = productos.map((p) => {
+    const movs = movsByProducto.get(p.id) ?? []
+    const stockActual = Number(p.stockTotal)
+
+    const stockInicial =
+      movs.length > 0 ? Number(movs[0].stockAnterior) : stockActual
+    const stockFinal =
+      movs.length > 0
+        ? Number(movs[movs.length - 1].stockPosterior)
+        : stockActual
+
+    const suma = (tipo: string) =>
+      movs
+        .filter((m) => m.tipo === tipo)
+        .reduce((acc, m) => acc + Number(m.cantidad), 0)
+
+    const egresosVta       = suma("EGRESO_VENTA")
+    const egresosMerma     = suma("EGRESO_MERMA")
+    const egresosFaltante  = suma("EGRESO_FALTANTE")
+    const egresosSobra     = suma("AJUSTE_NEGATIVO")
+    const egresosOtros     = suma("DEVOLUCION_PROVEEDOR")
+    const ingresosCompra   = suma("INGRESO_COMPRA")
+    const ingresosMerma    = 0
+    const ingresosFaltante = 0
+    const ingresosSobrante = suma("INGRESO_SOBRANTE")
+    const ingresosOtro     = suma("AJUSTE_POSITIVO") + suma("DEVOLUCION_CLIENTE")
+
+    return {
+      productoId: p.id,
+      codigo:       p.codigo,
+      descripcion:  p.nombre,
+      presentacion: p.unidadBase.abreviatura,
+      stockInicial,
+      egresosVta,
+      egresosMerma,
+      egresosFaltante,
+      egresosSobra,
+      egresosOtros,
+      totalEgresos:  egresosVta + egresosMerma + egresosFaltante + egresosSobra + egresosOtros,
+      ingresosCompra,
+      ingresosMerma,
+      ingresosFaltante,
+      ingresosSobrante,
+      ingresosOtro,
+      totalIngresos: ingresosCompra + ingresosMerma + ingresosFaltante + ingresosSobrante + ingresosOtro,
+      stockFinal,
+    }
+  })
+
+  return { caja, filas }
+}
 
 export async function obtenerResumenStock() {
   const productos = await prisma.producto.findMany({
