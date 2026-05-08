@@ -7,6 +7,7 @@ import { esquemaAperturaCaja, DatosAperturaCaja } from "@/lib/validaciones/caja"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { submitSeguro } from "@/lib/submit-helpers"
 
 interface Props {
   onSubmit: (data: DatosAperturaCaja) => Promise<{ ok?: boolean; error?: string }>
@@ -28,9 +29,12 @@ export function FormAperturaCaja({ onSubmit }: Props) {
   async function procesar(data: DatosAperturaCaja) {
     setError(null)
     setLoading(true)
-    const res = await onSubmit(data)
-    if (res.error) setError(res.error)
-    setLoading(false)
+    try {
+      const res = await submitSeguro(() => onSubmit(data))
+      if (!res.ok) setError(res.error)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

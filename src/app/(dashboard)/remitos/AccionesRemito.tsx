@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { XCircle } from "lucide-react"
+import { submitSeguro } from "@/lib/submit-helpers"
 
 interface Props {
   remitoId: string
@@ -32,13 +33,13 @@ export function AccionesRemito({ remitoId }: Props) {
   async function confirmar(data: DatosAnularRemito) {
     setError(null)
     setLoading(true)
-    const res = await anularRemito(remitoId, data)
-    if (res.error) {
-      setError(res.error)
+    try {
+      const res = await submitSeguro(() => anularRemito(remitoId, data))
+      if (!res.ok) { setError(res.error); return }
+      router.refresh()
+    } finally {
       setLoading(false)
-      return
     }
-    router.refresh()
   }
 
   if (!mostrando) {

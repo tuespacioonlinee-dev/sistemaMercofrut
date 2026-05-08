@@ -65,18 +65,31 @@ export async function ajustarStock(data: unknown) {
   const producto = await prisma.producto.findUnique({ where: { id: productoId } })
   if (!producto) return { error: "Producto no encontrado." }
 
-  const stockAnterior = Number(producto.stockTotal)
-  const delta = tipo === "AJUSTE_POSITIVO" ? cantidad : -cantidad
-  const stockPosterior = stockAnterior + delta
+  // Pre-check (no bloquea la concurrencia, pero da error claro al usuario común)
+  if (tipo === "AJUSTE_NEGATIVO" && Number(producto.stockTotal) - cantidad < 0) {
+    return { error: "El stock no puede quedar negativo." }
+  }
 
-  if (stockPosterior < 0) return { error: "El stock no puede quedar negativo." }
-
-  await prisma.$transaction([
-    prisma.producto.update({
+  // Update atómico — el stockPosterior se obtiene del valor real post-update
+  await prisma.$transaction(async (tx) => {
+    const updated = await tx.producto.update({
       where: { id: productoId },
-      data: { stockTotal: stockPosterior },
-    }),
-    prisma.movimientoStock.create({
+      data:  tipo === "AJUSTE_POSITIVO"
+        ? { stockTotal: { increment: cantidad } }
+        : { stockTotal: { decrement: cantidad } },
+      select: { stockTotal: true },
+    })
+    const stockPosterior = Number(updated.stockTotal)
+    const stockAnterior  = tipo === "AJUSTE_POSITIVO"
+      ? stockPosterior - cantidad
+      : stockPosterior + cantidad
+
+    // Defensa final ante race: si quedó negativo, abortar (rollback)
+    if (stockPosterior < 0) {
+      throw new Error("STOCK_NEGATIVO")
+    }
+
+    await tx.movimientoStock.create({
       data: {
         productoId,
         tipo: tipo as TipoMovimientoStock,
@@ -86,8 +99,13 @@ export async function ajustarStock(data: unknown) {
         motivo,
         usuarioId: session.user.id,
       },
-    }),
-  ])
+    })
+  }).catch((e) => {
+    if (e instanceof Error && e.message === "STOCK_NEGATIVO") {
+      throw new Error("El stock no puede quedar negativo.")
+    }
+    throw e
+  })
 
   revalidatePath("/stock")
   return { ok: true }

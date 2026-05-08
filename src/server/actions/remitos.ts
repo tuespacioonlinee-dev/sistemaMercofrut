@@ -9,7 +9,8 @@ import {
   formatearNumeroRemito,
 } from "@/lib/validaciones/remitos"
 
-export async function obtenerRemitos() {
+export async function obtenerRemitos(opts?: { cursor?: string; take?: number }) {
+  const take = Math.min(opts?.take ?? 300, 500)
   return prisma.remito.findMany({
     include: {
       venta: {
@@ -23,7 +24,8 @@ export async function obtenerRemitos() {
       },
     },
     orderBy: { fecha: "desc" },
-    take: 200,
+    take,
+    ...(opts?.cursor ? { skip: 1, cursor: { id: opts.cursor } } : {}),
   })
 }
 
@@ -62,7 +64,7 @@ export async function obtenerVentasParaRemito() {
       },
     },
     orderBy: { fecha: "desc" },
-    take: 100,
+    take: 300,
   })
 }
 
@@ -83,9 +85,10 @@ export async function crearRemito(data: unknown) {
   if (!venta) return { error: "Venta no encontrada" }
   if (venta.estado !== "CONFIRMADA") return { error: "Solo se pueden generar remitos de ventas confirmadas" }
 
-  // Obtener/crear parámetros y numerar en transacción atómica
+  // Obtener/crear parámetros y numerar en transacción atómica.
+  // Importante: hacemos UPDATE { increment } ANTES y derivamos el número del valor retornado.
+  // Postgres serializa los UPDATEs concurrentes sobre la misma fila, evitando duplicados.
   const remito = await prisma.$transaction(async (tx) => {
-    // Lock optimista: leer y actualizar el correlativo en la misma transacción
     let params = await tx.parametrosComprobante.findFirst()
     if (!params) {
       params = await tx.parametrosComprobante.create({
@@ -93,19 +96,18 @@ export async function crearRemito(data: unknown) {
       })
     }
 
-    const numero = formatearNumeroRemito(params.puntoVenta, params.proximoRemito)
-
-    // Incrementar correlativo
-    await tx.parametrosComprobante.update({
+    const actualizado = await tx.parametrosComprobante.update({
       where: { id: params.id },
-      data: { proximoRemito: { increment: 1 } },
+      data:  { proximoRemito: { increment: 1 } },
+      select: { proximoRemito: true, puntoVenta: true },
     })
+    const numeroAsignado = actualizado.proximoRemito - 1
+    const numero = formatearNumeroRemito(actualizado.puntoVenta, numeroAsignado)
 
-    // Crear el remito
     return tx.remito.create({
       data: {
         numero,
-        puntoVenta: params.puntoVenta,
+        puntoVenta: actualizado.puntoVenta,
         ventaId,
         estado: "EMITIDO",
         ...(observaciones ? { motivoAnulacion: undefined } : {}),

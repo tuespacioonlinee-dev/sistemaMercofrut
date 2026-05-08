@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { esquemaCrearRemito, DatosCrearRemito } from "@/lib/validaciones/remitos"
 import { crearRemito } from "@/server/actions/remitos"
 import { formatearPesos } from "@/lib/utils"
+import { submitSeguro } from "@/lib/submit-helpers"
 import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -60,13 +61,13 @@ export function FormNuevoRemito({ ventas }: Props) {
   async function procesar(data: DatosCrearRemito) {
     setError(null)
     setLoading(true)
-    const res = await crearRemito(data)
-    if (res.error) {
-      setError(res.error)
+    try {
+      const res = await submitSeguro(() => crearRemito(data))
+      if (!res.ok) { setError(res.error); return }
+      router.push(`/remitos/${res.data.id}`)
+    } finally {
       setLoading(false)
-      return
     }
-    router.push(`/remitos/${res.id}`)
   }
 
   return (

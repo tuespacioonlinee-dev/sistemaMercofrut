@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { submitSeguro } from "@/lib/submit-helpers"
 
 interface Props {
   onSubmit: (data: DatosMovimientoCaja) => Promise<{ ok?: boolean; error?: string }>
@@ -47,13 +48,16 @@ export function FormMovimiento({ onSubmit }: Props) {
   async function procesar(data: DatosMovimientoCaja) {
     setError(null)
     setLoading(true)
-    const res = await onSubmit(data)
-    if (res.error) {
-      setError(res.error)
-    } else {
-      reset({ categoria: "GASTO", ladoOtro: "DEBE", monto: 0, descripcion: "" })
+    try {
+      const res = await submitSeguro(() => onSubmit(data))
+      if (!res.ok) {
+        setError(res.error)
+      } else {
+        reset({ categoria: "GASTO", ladoOtro: "DEBE", monto: 0, descripcion: "" })
+      }
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (

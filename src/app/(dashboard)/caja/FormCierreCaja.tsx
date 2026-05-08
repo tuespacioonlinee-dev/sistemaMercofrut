@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { submitSeguro } from "@/lib/submit-helpers"
 
 interface Props {
   saldoEsperado:     number
@@ -47,9 +48,12 @@ export function FormCierreCaja({
   async function procesar(data: DatosCierreCaja) {
     setError(null)
     setLoading(true)
-    const res = await onSubmit(data)
-    if (res.error) setError(res.error)
-    setLoading(false)
+    try {
+      const res = await submitSeguro(() => onSubmit(data))
+      if (!res.ok) setError(res.error)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

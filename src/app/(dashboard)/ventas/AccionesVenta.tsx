@@ -6,6 +6,7 @@ import { anularVenta } from "@/server/actions/ventas"
 import { Button } from "@/components/ui/button"
 import { Eye, FileText, XCircle } from "lucide-react"
 import { toast } from "sonner"
+import { submitSeguro } from "@/lib/submit-helpers"
 
 interface Props {
   id:       string
@@ -22,16 +23,17 @@ export function AccionesVenta({ id, numero, remitoId }: Props) {
     if (!motivo || motivo.trim() === "") return
 
     setAnulando(true)
-    const resultado = await anularVenta(id, motivo.trim())
-    setAnulando(false)
-
-    if (resultado.error) {
-      toast.error(resultado.error)
-      return
+    try {
+      const res = await submitSeguro(() => anularVenta(id, motivo.trim()))
+      if (!res.ok) {
+        toast.error(res.error)
+        return
+      }
+      toast.success("Venta anulada. El stock fue restaurado.")
+      router.refresh()
+    } finally {
+      setAnulando(false)
     }
-
-    toast.success("Venta anulada. El stock fue restaurado.")
-    router.refresh()
   }
 
   return (

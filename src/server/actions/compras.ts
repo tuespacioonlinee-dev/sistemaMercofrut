@@ -13,7 +13,7 @@ export async function crearCompra(data: unknown) {
   const parsed = compraSchema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
 
-  const { detalles, descuento, iva, ...cabecera } = parsed.data
+  const { detalles, descuento, iva, clientRequestId, ...cabecera } = parsed.data
 
   // Resolver factores de conversión y calcular totales
   const unidadesIds = [...new Set(detalles.map((d) => d.unidadId))]
@@ -43,7 +43,19 @@ export async function crearCompra(data: unknown) {
   const subtotal = detallesConBase.reduce((acc, d) => acc + d.subtotal, 0)
   const total = subtotal + (iva ?? 0) - descuento
 
+  let compraYaExistia = false
+  let compraId: string | null = null
+
   await prisma.$transaction(async (tx) => {
+    // ── 0. Idempotency check ──────────────────────────────────────────────
+    if (clientRequestId) {
+      const existente = await tx.compra.findUnique({
+        where: { clientRequestId },
+        select: { id: true },
+      })
+      if (existente) { compraYaExistia = true; compraId = existente.id; return }
+    }
+
     // 1. Crear la compra con sus detalles
     const compra = await tx.compra.create({
       data: {
@@ -55,6 +67,7 @@ export async function crearCompra(data: unknown) {
         subtotal,
         total,
         creadaPorId: session.user.id,
+        clientRequestId: clientRequestId ?? null,
         detalles: {
           create: detallesConBase.map((d) => ({
             productoId: d.productoId,
@@ -67,17 +80,19 @@ export async function crearCompra(data: unknown) {
         },
       },
     })
+    compraId = compra.id
 
-    // 2. Actualizar stock + registrar movimiento + crear lote si corresponde
+    // 2. Actualizar stock atómicamente + registrar movimiento + crear lote
     for (const d of detallesConBase) {
       const producto = productos.find((p) => p.id === d.productoId)!
-      const stockAnterior = Number(producto.stockTotal)
-      const stockPosterior = stockAnterior + d.cantidadBase
 
-      await tx.producto.update({
+      const updated = await tx.producto.update({
         where: { id: d.productoId },
-        data: { stockTotal: stockPosterior },
+        data:  { stockTotal: { increment: d.cantidadBase } },
+        select: { stockTotal: true },
       })
+      const stockPosterior = Number(updated.stockTotal)
+      const stockAnterior  = stockPosterior - d.cantidadBase
 
       await tx.movimientoStock.create({
         data: {
@@ -92,7 +107,7 @@ export async function crearCompra(data: unknown) {
         },
       })
 
-      // Crear lote si el producto controla vencimiento
+      // Crear lote si el producto controla vencimiento — vinculado a esta compra
       if (producto.controlaVencimiento) {
         await tx.loteProducto.create({
           data: {
@@ -101,6 +116,7 @@ export async function crearCompra(data: unknown) {
             cantidadInicial: d.cantidadBase,
             cantidadActual: d.cantidadBase,
             fechaVencimiento: d.fechaVencimiento ? new Date(d.fechaVencimiento) : null,
+            origenCompraId: compra.id,
           },
         })
       }
@@ -158,13 +174,13 @@ export async function crearCompra(data: unknown) {
         })
       }
 
-      const saldoAnterior = Number(cuenta.saldo)
-      const saldoPosterior = saldoAnterior + total
-
-      await tx.cuenta.update({
+      const cuentaActualizada = await tx.cuenta.update({
         where: { id: cuenta.id },
-        data: { saldo: saldoPosterior },
+        data:  { saldo: { increment: total } },
+        select: { saldo: true },
       })
+      const saldoPosterior = Number(cuentaActualizada.saldo)
+      const saldoAnterior  = saldoPosterior - total
 
       await tx.movimientoCuenta.create({
         data: {
@@ -180,12 +196,12 @@ export async function crearCompra(data: unknown) {
         },
       })
     }
-  })
+  }, { maxWait: 10_000, timeout: 20_000 })
 
   revalidatePath("/compras")
   revalidatePath("/stock")
   revalidatePath("/lotes")
-  return { ok: true }
+  return { ok: true, compraId, duplicada: compraYaExistia }
 }
 
 export async function anularCompra(id: string, motivo: string) {
@@ -206,24 +222,24 @@ export async function anularCompra(id: string, motivo: string) {
       data: { estado: "ANULADA", anuladaEn: new Date(), motivoAnulacion: motivo },
     })
 
-    // 2. Revertir stock
+    // 2. Revertir stock atómicamente
     for (const detalle of compra.detalles) {
-      const producto = await tx.producto.findUnique({ where: { id: detalle.productoId } })
-      if (!producto) continue
-
-      const stockAnterior = Number(producto.stockTotal)
-      const stockPosterior = stockAnterior - Number(detalle.cantidadBase)
-
-      await tx.producto.update({
+      const cantidad = Number(detalle.cantidadBase)
+      const updated = await tx.producto.update({
         where: { id: detalle.productoId },
-        data: { stockTotal: stockPosterior },
-      })
+        data:  { stockTotal: { decrement: cantidad } },
+        select: { stockTotal: true },
+      }).catch(() => null)
+      if (!updated) continue
+
+      const stockPosterior = Number(updated.stockTotal)
+      const stockAnterior  = stockPosterior + cantidad
 
       await tx.movimientoStock.create({
         data: {
           productoId: detalle.productoId,
           tipo: "DEVOLUCION_PROVEEDOR",
-          cantidad: Number(detalle.cantidadBase),
+          cantidad,
           stockAnterior,
           stockPosterior,
           motivo: `Anulación compra ${id}`,
@@ -232,31 +248,34 @@ export async function anularCompra(id: string, motivo: string) {
           origenId: id,
         },
       })
-
-      // Desactivar lotes creados por esta compra
-      await tx.loteProducto.updateMany({
-        where: { productoId: detalle.productoId, activo: true },
-        data: { activo: false },
-      })
     }
 
-    // 3. Si era CC, revertir movimiento de cuenta
+    // 2b. Desactivar SOLO los lotes creados por esta compra
+    await tx.loteProducto.updateMany({
+      where: { origenCompraId: id, activo: true },
+      data: { activo: false },
+    })
+
+    // 3. Si era CC, revertir movimiento de cuenta (decrement atómico)
     if (compra.condicion === "CUENTA_CORRIENTE") {
       const cuenta = await tx.cuenta.findFirst({
         where: { proveedorId: compra.proveedorId, tipo: "CORRIENTE" },
       })
       if (cuenta) {
-        const saldoAnterior = Number(cuenta.saldo)
-        const saldoPosterior = saldoAnterior - Number(compra.total)
-        await tx.cuenta.update({
+        const totalNum = Number(compra.total)
+        const cuentaActualizada = await tx.cuenta.update({
           where: { id: cuenta.id },
-          data: { saldo: saldoPosterior },
+          data:  { saldo: { decrement: totalNum } },
+          select: { saldo: true },
         })
+        const saldoPosterior = Number(cuentaActualizada.saldo)
+        const saldoAnterior  = saldoPosterior + totalNum
+
         await tx.movimientoCuenta.create({
           data: {
             cuentaId: cuenta.id,
             tipo: "HABER",
-            monto: Number(compra.total),
+            monto: totalNum,
             saldoAnterior,
             saldoPosterior,
             descripcion: `Anulación compra ${id}`,
@@ -267,7 +286,7 @@ export async function anularCompra(id: string, motivo: string) {
         })
       }
     }
-  })
+  }, { maxWait: 10_000, timeout: 20_000 })
 
   revalidatePath("/compras")
   revalidatePath("/productos")

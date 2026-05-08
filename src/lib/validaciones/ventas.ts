@@ -14,6 +14,8 @@ export const ventaSchema = z.object({
   descuento: z.number().min(0),
   observaciones: z.string().max(500).trim().optional(),
   detalles: z.array(detalleVentaSchema).min(1, "Agregá al menos un producto"),
+  // Idempotency-key generada en el cliente (UUID). Permite reintentos seguros ante fallas de red.
+  clientRequestId: z.string().uuid().optional(),
 })
 
 export type DetalleVentaInput = z.infer<typeof detalleVentaSchema>

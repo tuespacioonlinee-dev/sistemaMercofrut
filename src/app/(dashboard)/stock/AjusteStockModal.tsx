@@ -9,6 +9,7 @@ import { toast } from "sonner"
 import { SlidersHorizontal } from "lucide-react"
 
 import { ajustarStock } from "@/server/actions/stock"
+import { submitSeguro } from "@/lib/submit-helpers"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -54,9 +55,9 @@ export function AjusteStockModal({ productoId, nombreProducto, stockActual, unid
 
   function onSubmit(data: FormData) {
     startTransition(async () => {
-      const resultado = await ajustarStock({ ...data, productoId })
-      if (resultado.error) {
-        toast.error(resultado.error)
+      const res = await submitSeguro(() => ajustarStock({ ...data, productoId }))
+      if (!res.ok) {
+        toast.error(res.error)
         return
       }
       toast.success("Stock ajustado correctamente.")

@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { esquemaCrearFactura, DatosCrearFactura } from "@/lib/validaciones/facturacion"
 import { crearFactura } from "@/server/actions/facturacion"
 import { formatearPesos } from "@/lib/utils"
+import { submitSeguro } from "@/lib/submit-helpers"
 import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -85,13 +86,13 @@ export function FormNuevaFactura({ ventas }: Props) {
   async function procesar(data: DatosCrearFactura) {
     setError(null)
     setLoading(true)
-    const res = await crearFactura(data)
-    if (res.error) {
-      setError(res.error)
+    try {
+      const res = await submitSeguro(() => crearFactura(data))
+      if (!res.ok) { setError(res.error); return }
+      router.push(`/facturacion/${res.data.id}`)
+    } finally {
       setLoading(false)
-      return
     }
-    router.push(`/facturacion/${res.id}`)
   }
 
   const disponibles = ventas.filter((v) => !v.yaFacturada)

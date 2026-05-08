@@ -3,12 +3,13 @@
 import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { toast } from "sonner"
 import { PlusCircle, Trash2, AlertTriangle } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 
 import { ventaSchema, VentaInput } from "@/lib/validaciones/ventas"
+import { generarClientRequestId, submitSeguro } from "@/lib/submit-helpers"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -40,6 +41,7 @@ interface Props {
     ventaId?:      string
     remitoId?:     string
     remitoNumero?: string
+    duplicada?:    boolean
   }>
 }
 
@@ -58,6 +60,8 @@ export function FormVenta({ clientes, productos, onSubmit }: Props) {
   const [guardando, setGuardando]         = useState(false)
   const [modoDesc, setModoDesc]           = useState<"fijo" | "pct">("fijo")
   const [valorDesc, setValorDesc]         = useState(0)
+  // ID estable para esta tentativa de venta — si se reintenta tras error de red, NO duplica.
+  const idempotencyRef = useRef<string>(generarClientRequestId())
 
   // Stock en tiempo real — se refresca cada 30 s automáticamente
   const { data: stockActual } = useQuery<Record<string, number>>({
@@ -114,25 +118,35 @@ export function FormVenta({ clientes, productos, onSubmit }: Props) {
   // ── Enviar formulario ──────────────────────────────────────────────────────
   async function procesarEnvio(data: VentaInput) {
     setGuardando(true)
-    const resultado = await onSubmit(data)
-    setGuardando(false)
+    try {
+      const dataConIdempotency = { ...data, clientRequestId: idempotencyRef.current }
+      const res = await submitSeguro(() => onSubmit(dataConIdempotency))
 
-    if (resultado.error) {
-      toast.error(resultado.error)
-      return
-    }
+      if (!res.ok) {
+        toast.error(res.error)
+        // En error de red el botón se habilita en finally — el usuario reintenta y
+        // el server detecta el clientRequestId duplicado, así no se carga 2 veces.
+        return
+      }
 
-    toast.success(
-      resultado.remitoNumero
-        ? `Venta registrada. Remito ${resultado.remitoNumero} generado.`
-        : "Venta registrada correctamente."
-    )
+      const resultado = res.data
+      if (resultado.duplicada) {
+        toast.info("La venta ya estaba registrada (reintento detectado).")
+      } else {
+        toast.success(
+          resultado.remitoNumero
+            ? `Venta registrada. Remito ${resultado.remitoNumero} generado.`
+            : "Venta registrada correctamente."
+        )
+      }
 
-    // CAMBIO 2: redirigir a la vista del remito para imprimir/descargar
-    if (resultado.remitoId) {
-      router.push(`/remitos/${resultado.remitoId}`)
-    } else {
-      router.push("/ventas")
+      if (resultado.remitoId) {
+        router.push(`/remitos/${resultado.remitoId}`)
+      } else {
+        router.push("/ventas")
+      }
+    } finally {
+      setGuardando(false)
     }
   }
 

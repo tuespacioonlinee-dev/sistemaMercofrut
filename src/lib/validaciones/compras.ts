@@ -45,6 +45,8 @@ export const compraSchema = z.object({
   detalles: z
     .array(detalleCompraSchema)
     .min(1, "Agregá al menos un producto"),
+  // Idempotency-key generada en el cliente (UUID).
+  clientRequestId: z.string().uuid().optional(),
 })
 
 export type DetalleCompraInput = z.infer<typeof detalleCompraSchema>

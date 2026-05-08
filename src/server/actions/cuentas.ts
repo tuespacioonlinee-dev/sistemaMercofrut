@@ -58,7 +58,8 @@ export async function obtenerCuentasCorrientes() {
 export async function registrarCobro(
   cuentaId: string,
   monto: number,
-  concepto: string
+  concepto: string,
+  clientRequestId?: string
 ) {
   const session = await auth()
   if (!session) return { error: "No autorizado" }
@@ -68,10 +69,27 @@ export async function registrarCobro(
   const cuenta = await prisma.cuenta.findUnique({ where: { id: cuentaId, deletedAt: null } })
   if (!cuenta) return { error: "Cuenta no encontrada" }
 
-  const saldoAnterior = Number(cuenta.saldo)
-  const saldoPosterior = saldoAnterior - monto
+  let duplicada = false
 
   await prisma.$transaction(async (tx) => {
+    // Idempotency: si ya existe un movimiento con este clientRequestId, no duplicar
+    if (clientRequestId) {
+      const existente = await tx.movimientoCuenta.findUnique({
+        where: { clientRequestId },
+        select: { id: true },
+      })
+      if (existente) { duplicada = true; return }
+    }
+
+    // Decrement atómico sobre el saldo (evita lost-update)
+    const cuentaActualizada = await tx.cuenta.update({
+      where: { id: cuentaId },
+      data:  { saldo: { decrement: monto } },
+      select: { saldo: true },
+    })
+    const saldoPosterior = Number(cuentaActualizada.saldo)
+    const saldoAnterior  = saldoPosterior + monto
+
     await tx.movimientoCuenta.create({
       data: {
         cuentaId,
@@ -83,9 +101,9 @@ export async function registrarCobro(
         usuarioId: session.user.id,
         origenTipo: "COBRO_CLIENTE",
         origenId: cuentaId,
+        clientRequestId: clientRequestId ?? null,
       },
     })
-    await tx.cuenta.update({ where: { id: cuentaId }, data: { saldo: saldoPosterior } })
     await registrarMovimientoCajaEnTx(tx, {
       tipo: "CC_HABER",
       categoria: "COBRO_CLIENTE",
@@ -100,13 +118,14 @@ export async function registrarCobro(
   revalidatePath("/cuentas")
   revalidatePath(`/cuentas/${cuentaId}`)
   revalidatePath("/caja")
-  return { ok: true, cuentaId }
+  return { ok: true, cuentaId, duplicada }
 }
 
 export async function registrarPago(
   cuentaId: string,
   monto: number,
-  concepto: string
+  concepto: string,
+  clientRequestId?: string
 ) {
   const session = await auth()
   if (!session) return { error: "No autorizado" }
@@ -116,10 +135,25 @@ export async function registrarPago(
   const cuenta = await prisma.cuenta.findUnique({ where: { id: cuentaId, deletedAt: null } })
   if (!cuenta) return { error: "Cuenta no encontrada" }
 
-  const saldoAnterior = Number(cuenta.saldo)
-  const saldoPosterior = saldoAnterior - monto
+  let duplicada = false
 
   await prisma.$transaction(async (tx) => {
+    if (clientRequestId) {
+      const existente = await tx.movimientoCuenta.findUnique({
+        where: { clientRequestId },
+        select: { id: true },
+      })
+      if (existente) { duplicada = true; return }
+    }
+
+    const cuentaActualizada = await tx.cuenta.update({
+      where: { id: cuentaId },
+      data:  { saldo: { decrement: monto } },
+      select: { saldo: true },
+    })
+    const saldoPosterior = Number(cuentaActualizada.saldo)
+    const saldoAnterior  = saldoPosterior + monto
+
     await tx.movimientoCuenta.create({
       data: {
         cuentaId,
@@ -131,9 +165,9 @@ export async function registrarPago(
         usuarioId: session.user.id,
         origenTipo: "PAGO_PROVEEDOR",
         origenId: cuentaId,
+        clientRequestId: clientRequestId ?? null,
       },
     })
-    await tx.cuenta.update({ where: { id: cuentaId }, data: { saldo: saldoPosterior } })
     await registrarMovimientoCajaEnTx(tx, {
       tipo: "CC_DEBE",
       categoria: "PAGO_PROVEEDOR",
@@ -148,7 +182,7 @@ export async function registrarPago(
   revalidatePath("/cuentas")
   revalidatePath(`/cuentas/${cuentaId}`)
   revalidatePath("/caja")
-  return { ok: true, cuentaId }
+  return { ok: true, cuentaId, duplicada }
 }
 
 export async function crearCuenta(formData: unknown) {

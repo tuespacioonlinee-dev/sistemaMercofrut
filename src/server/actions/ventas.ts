@@ -11,16 +11,25 @@ import { registrarMovimientoCajaEnTx } from "@/server/actions/caja"
 // Queries
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function obtenerVentas() {
+/**
+ * Listado de ventas con paginación cursor.
+ *
+ * Para la primera página, llamar sin `cursor` y `take` hasta 200.
+ * El último elemento devuelto trae `id` que se puede pasar como `cursor` para la siguiente página.
+ */
+export async function obtenerVentas(opts?: { cursor?: string; take?: number; soloActivas?: boolean }) {
+  const take = Math.min(opts?.take ?? 200, 500)
+  const where = opts?.soloActivas === false ? {} : { estado: { not: "ANULADA" as const } }
   return prisma.venta.findMany({
-    where: { estado: { not: "ANULADA" } },
+    where,
     include: {
       cliente: { select: { nombreRazonSocial: true } },
       creadaPor: { select: { nombre: true } },
       remitos: { select: { id: true, numero: true, estado: true } },
     },
     orderBy: { fecha: "desc" },
-    take: 100,
+    take,
+    ...(opts?.cursor ? { skip: 1, cursor: { id: opts.cursor } } : {}),
   })
 }
 
@@ -54,7 +63,7 @@ export async function crearVenta(data: unknown) {
   const parsed = ventaSchema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
 
-  const { detalles, descuento, clienteId, condicion, observaciones } = parsed.data
+  const { detalles, descuento, clienteId, condicion, observaciones, clientRequestId } = parsed.data
 
   // Traer productos y factores de conversión
   const productosIds = [...new Set(detalles.map((d) => d.productoId))]
@@ -90,8 +99,24 @@ export async function crearVenta(data: unknown) {
   let ventaId:  string
   let remitoId: string
   let remitoNumero: string
+  let ventaYaExistia = false
 
   await prisma.$transaction(async (tx) => {
+    // ── 0. Idempotency: si ya existe una venta con este clientRequestId, devolver la existente ──
+    if (clientRequestId) {
+      const existente = await tx.venta.findUnique({
+        where: { clientRequestId },
+        include: { remitos: { take: 1, orderBy: { fecha: "desc" } } },
+      })
+      if (existente) {
+        ventaId = existente.id
+        ventaYaExistia = true
+        const r = existente.remitos[0]
+        if (r) { remitoId = r.id; remitoNumero = r.numero }
+        return
+      }
+    }
+
     // ── 1. Buscar o crear cuenta del cliente ─────────────────────────────
     let cuenta = await tx.cuenta.findFirst({
       where: {
@@ -122,8 +147,9 @@ export async function crearVenta(data: unknown) {
         subtotal,
         descuento,
         total,
-        observaciones: observaciones ?? null,
-        creadaPorId:   session.user.id,
+        observaciones:    observaciones ?? null,
+        creadaPorId:      session.user.id,
+        clientRequestId:  clientRequestId ?? null,
         detalles: {
           create: detallesConBase.map((d) => ({
             productoId:     d.productoId,
@@ -139,16 +165,15 @@ export async function crearVenta(data: unknown) {
 
     ventaId = venta.id
 
-    // ── 3. Descontar stock ────────────────────────────────────────────────
+    // ── 3. Descontar stock atómicamente (decrement evita lost-update) ─────
     for (const d of detallesConBase) {
-      const producto     = productos.find((p) => p.id === d.productoId)!
-      const stockAnterior  = Number(producto.stockTotal)
-      const stockPosterior = stockAnterior - d.cantidadBase
-
-      await tx.producto.update({
+      const updated = await tx.producto.update({
         where: { id: d.productoId },
-        data:  { stockTotal: stockPosterior },
+        data:  { stockTotal: { decrement: d.cantidadBase } },
+        select: { stockTotal: true },
       })
+      const stockPosterior = Number(updated.stockTotal)
+      const stockAnterior  = stockPosterior + d.cantidadBase
 
       await tx.movimientoStock.create({
         data: {
@@ -164,14 +189,14 @@ export async function crearVenta(data: unknown) {
       })
     }
 
-    // ── 4. Movimiento de cuenta corriente ────────────────────────────────
-    const saldoAnterior  = Number(cuenta.saldo)
-    const saldoPosterior = saldoAnterior + total
-
-    await tx.cuenta.update({
+    // ── 4. Movimiento de cuenta corriente (increment atómico) ────────────
+    const cuentaActualizada = await tx.cuenta.update({
       where: { id: cuenta.id },
-      data:  { saldo: saldoPosterior },
+      data:  { saldo: { increment: total } },
+      select: { saldo: true },
     })
+    const saldoPosterior = Number(cuentaActualizada.saldo)
+    const saldoAnterior  = saldoPosterior - total
 
     await tx.movimientoCuenta.create({
       data: {
@@ -187,23 +212,25 @@ export async function crearVenta(data: unknown) {
       },
     })
 
-    // ── 5. Crear remito correlativo en la misma transacción ───────────────
+    // ── 5. Crear remito correlativo (increment ANTES de derivar número) ───
     let comp = await tx.parametrosComprobante.findFirst()
     if (!comp) {
       comp = await tx.parametrosComprobante.create({ data: { puntoVenta: 1 } })
     }
 
-    const numero = formatearNumeroRemito(comp.puntoVenta, comp.proximoRemito)
-
-    await tx.parametrosComprobante.update({
+    // El UPDATE atómico serializa las concurrentes; usamos el valor post-increment.
+    const compActualizado = await tx.parametrosComprobante.update({
       where: { id: comp.id },
       data:  { proximoRemito: { increment: 1 } },
+      select: { proximoRemito: true, puntoVenta: true },
     })
+    const numeroAsignado = compActualizado.proximoRemito - 1
+    const numero = formatearNumeroRemito(compActualizado.puntoVenta, numeroAsignado)
 
     const remito = await tx.remito.create({
       data: {
         numero,
-        puntoVenta: comp.puntoVenta,
+        puntoVenta: compActualizado.puntoVenta,
         ventaId:    venta.id,
         estado:     "EMITIDO",
       },
@@ -212,7 +239,7 @@ export async function crearVenta(data: unknown) {
     remitoId     = remito.id
     remitoNumero = remito.numero
 
-    // ── 6. Movimiento de caja ─────────────────────────────────────────────
+    // ── 6. Movimiento de caja (si hay caja abierta) ───────────────────────
     if (condicion === "CONTADO") {
       await registrarMovimientoCajaEnTx(tx, {
         tipo:        "CONTADO_HABER",
@@ -235,7 +262,7 @@ export async function crearVenta(data: unknown) {
         origenId:    venta.id,
       })
     }
-  })
+  }, { maxWait: 10_000, timeout: 20_000 })
 
   revalidatePath("/ventas")
   revalidatePath("/remitos")
@@ -243,7 +270,13 @@ export async function crearVenta(data: unknown) {
   revalidatePath("/cuentas")
   revalidatePath("/caja")
 
-  return { ok: true, ventaId: ventaId!, remitoId: remitoId!, remitoNumero: remitoNumero! }
+  return {
+    ok: true,
+    ventaId: ventaId!,
+    remitoId: remitoId!,
+    remitoNumero: remitoNumero!,
+    duplicada: ventaYaExistia,
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -278,24 +311,24 @@ export async function anularVenta(id: string, motivo: string) {
       }
     }
 
-    // 3. Devolver stock
+    // 3. Devolver stock atómicamente
     for (const detalle of venta.detalles) {
-      const producto = await tx.producto.findUnique({ where: { id: detalle.productoId } })
-      if (!producto) continue
-
-      const stockAnterior  = Number(producto.stockTotal)
-      const stockPosterior = stockAnterior + Number(detalle.cantidadBase)
-
-      await tx.producto.update({
+      const cantidad = Number(detalle.cantidadBase)
+      const updated = await tx.producto.update({
         where: { id: detalle.productoId },
-        data:  { stockTotal: stockPosterior },
-      })
+        data:  { stockTotal: { increment: cantidad } },
+        select: { stockTotal: true },
+      }).catch(() => null)
+      if (!updated) continue
+
+      const stockPosterior = Number(updated.stockTotal)
+      const stockAnterior  = stockPosterior - cantidad
 
       await tx.movimientoStock.create({
         data: {
           productoId:    detalle.productoId,
           tipo:          "DEVOLUCION_CLIENTE",
-          cantidad:      Number(detalle.cantidadBase),
+          cantidad,
           stockAnterior,
           stockPosterior,
           motivo:        `Anulación venta #${venta.numero}`,
@@ -306,22 +339,23 @@ export async function anularVenta(id: string, motivo: string) {
       })
     }
 
-    // 4. Revertir movimiento de cuenta
-    const cuenta = await tx.cuenta.findUnique({ where: { id: venta.cuentaId } })
-    if (cuenta) {
-      const saldoAnterior  = Number(cuenta.saldo)
-      const saldoPosterior = saldoAnterior - Number(venta.total)
+    // 4. Revertir movimiento de cuenta (decrement atómico)
+    const totalNum = Number(venta.total)
+    const cuentaActualizada = await tx.cuenta.update({
+      where: { id: venta.cuentaId },
+      data:  { saldo: { decrement: totalNum } },
+      select: { saldo: true, id: true },
+    }).catch(() => null)
 
-      await tx.cuenta.update({
-        where: { id: cuenta.id },
-        data:  { saldo: saldoPosterior },
-      })
+    if (cuentaActualizada) {
+      const saldoPosterior = Number(cuentaActualizada.saldo)
+      const saldoAnterior  = saldoPosterior + totalNum
 
       await tx.movimientoCuenta.create({
         data: {
-          cuentaId:      cuenta.id,
+          cuentaId:      cuentaActualizada.id,
           tipo:          "HABER",
-          monto:         Number(venta.total),
+          monto:         totalNum,
           saldoAnterior,
           saldoPosterior,
           descripcion:   `Anulación venta #${venta.numero}`,
@@ -344,7 +378,7 @@ export async function anularVenta(id: string, motivo: string) {
         origenId:    id,
       })
     }
-  })
+  }, { maxWait: 10_000, timeout: 20_000 })
 
   revalidatePath("/ventas")
   revalidatePath("/remitos")

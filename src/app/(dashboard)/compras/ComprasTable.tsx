@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { anularCompra } from "@/server/actions/compras"
+import { submitSeguro } from "@/lib/submit-helpers"
 
 type CompraRow = {
   id: string
@@ -78,8 +79,8 @@ export function ComprasTable({ compras }: Props) {
   function confirmarAnulacion() {
     if (!anulando || !motivo.trim()) return
     startTransition(async () => {
-      const res = await anularCompra(anulando.id, motivo)
-      if (res.error) { toast.error(res.error); return }
+      const res = await submitSeguro(() => anularCompra(anulando.id, motivo))
+      if (!res.ok) { toast.error(res.error); return }
       toast.success("Compra anulada")
       setAnulando(null)
       setMotivo("")

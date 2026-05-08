@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useTransition, useState, useEffect } from "react"
+import { useTransition, useState, useEffect, useRef } from "react"
+import { generarClientRequestId, submitSeguro } from "@/lib/submit-helpers"
 import { toast } from "sonner"
 import { Plus, Trash2, CalendarClock } from "lucide-react"
 import type { UnidadMedida } from "@prisma/client"
@@ -57,6 +58,7 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
   const [ivaAlicuota, setIvaAlicuota] = useState<AlicuotaIVA>(0)
   const [modoDesc, setModoDesc]       = useState<"fijo" | "pct">("fijo")
   const [valorDesc, setValorDesc]     = useState(0)
+  const idempotencyRef = useRef<string>(generarClientRequestId())
 
   const {
     register,
@@ -115,12 +117,17 @@ export function FormCompra({ proveedores, productos, unidades }: Props) {
 
   function onSubmit(data: CompraInput) {
     startTransition(async () => {
-      const res = await crearCompra(data)
-      if (res.error) {
+      const dataConIdempotency = { ...data, clientRequestId: idempotencyRef.current }
+      const res = await submitSeguro(() => crearCompra(dataConIdempotency))
+      if (!res.ok) {
         toast.error(res.error)
         return
       }
-      toast.success("Compra registrada. Stock actualizado.")
+      if (res.data.duplicada) {
+        toast.info("La compra ya estaba registrada (reintento detectado).")
+      } else {
+        toast.success("Compra registrada. Stock actualizado.")
+      }
       router.push("/compras")
     })
   }

@@ -126,11 +126,14 @@ model LoteProducto {
   cantidadInicial  Decimal   @db.Decimal(12, 3)
   cantidadActual   Decimal   @db.Decimal(12, 3)
   activo           Boolean   @default(true)
+  // Vinculación con la compra que creó el lote — permite revertir solo los lotes de esa compra
+  origenCompraId   String?
 
   producto Producto @relation(fields: [productoId], references: [id])
 
   @@index([productoId])
   @@index([fechaVencimiento])
+  @@index([origenCompraId])
 }
 
 // ============================================================================
@@ -304,6 +307,8 @@ model MovimientoCuenta {
 
   origenTipo String?
   origenId   String?
+  // Idempotency para cobros y pagos repetidos
+  clientRequestId String?      @unique
 
   cuenta  Cuenta  @relation(fields: [cuentaId], references: [id])
   usuario Usuario @relation(fields: [usuarioId], references: [id])
@@ -420,6 +425,8 @@ model Venta {
   creadaPorId     String
   anuladaEn       DateTime?
   motivoAnulacion String?
+  // Idempotency: clave generada en el cliente, garantiza que reintentos no dupliquen ventas.
+  clientRequestId String?        @unique
 
   cliente   Cliente @relation(fields: [clienteId], references: [id])
   cuenta    Cuenta  @relation(fields: [cuentaId], references: [id])
@@ -494,6 +501,7 @@ model Compra {
   creadaPorId       String
   anuladaEn         DateTime?
   motivoAnulacion   String?
+  clientRequestId   String?                @unique
 
   proveedor Proveedor @relation(fields: [proveedorId], references: [id])
   creadaPor Usuario   @relation("CompraCreadaPor", fields: [creadaPorId], references: [id])

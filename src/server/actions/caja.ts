@@ -32,7 +32,8 @@ export async function obtenerCajaAbierta() {
   })
 }
 
-export async function obtenerHistorialCajas() {
+export async function obtenerHistorialCajas(opts?: { cursor?: string; take?: number }) {
+  const take = Math.min(opts?.take ?? 90, 200)
   return prisma.cajaDiaria.findMany({
     where: { estado: "CERRADA" },
     include: {
@@ -40,7 +41,8 @@ export async function obtenerHistorialCajas() {
       cerradaPor: { select: { nombre: true } },
     },
     orderBy: { fechaApertura: "desc" },
-    take: 30,
+    take,
+    ...(opts?.cursor ? { skip: 1, cursor: { id: opts.cursor } } : {}),
   })
 }
 

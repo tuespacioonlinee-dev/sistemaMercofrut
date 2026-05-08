@@ -11,7 +11,8 @@ import {
   calcularIva,
 } from "@/lib/validaciones/facturacion"
 
-export async function obtenerFacturas() {
+export async function obtenerFacturas(opts?: { cursor?: string; take?: number }) {
+  const take = Math.min(opts?.take ?? 300, 500)
   return prisma.factura.findMany({
     include: {
       venta: {
@@ -25,7 +26,8 @@ export async function obtenerFacturas() {
       remito: { select: { numero: true } },
     },
     orderBy: { fechaEmision: "desc" },
-    take: 200,
+    take,
+    ...(opts?.cursor ? { skip: 1, cursor: { id: opts.cursor } } : {}),
   })
 }
 
@@ -66,7 +68,7 @@ export async function obtenerVentasParaFacturar() {
       },
     },
     orderBy: { fecha: "desc" },
-    take: 100,
+    take: 300,
   })
 
   return ventas
@@ -102,27 +104,38 @@ export async function crearFactura(data: unknown) {
   const iva = calcularIva(subtotal, tipo)
   const total = subtotal + iva
 
+  // Re-chequeo + numeración atómica. UPDATE increment serializa los writers concurrentes;
+  // el unique parcial sobre (ventaId, estado=EMITIDA) garantiza que dos clicks rápidos
+  // en la misma venta no generen duplicado.
+  let facturaYaExistia = false
   const factura = await prisma.$transaction(async (tx) => {
+    // Re-check dentro de la tx: si apareció una factura emitida entre el check inicial y acá, abortar
+    const yaFacturada = await tx.factura.findFirst({
+      where: { ventaId, estado: "EMITIDA" },
+      select: { id: true, numero: true, tipo: true },
+    })
+    if (yaFacturada) { facturaYaExistia = true; return yaFacturada }
+
     let comp = await tx.parametrosComprobante.findFirst()
     if (!comp) {
       comp = await tx.parametrosComprobante.create({ data: { puntoVenta: 1 } })
     }
 
-    // Elegir correlativo según tipo
-    const correlativoKey =
+    const correlativoKey: "proximaFacturaA" | "proximaFacturaB" | "proximaFacturaC" =
       tipo === "A" ? "proximaFacturaA" : tipo === "B" ? "proximaFacturaB" : "proximaFacturaC"
-    const numeroCorrelativo = comp[correlativoKey]
-    const numero = formatearNumeroFactura(comp.puntoVenta, numeroCorrelativo)
 
-    await tx.parametrosComprobante.update({
+    // Update atómico ANTES de derivar el número
+    const actualizado = await tx.parametrosComprobante.update({
       where: { id: comp.id },
-      data: { [correlativoKey]: { increment: 1 } },
+      data:  { [correlativoKey]: { increment: 1 } },
     })
+    const numeroAsignado = actualizado[correlativoKey] - 1
+    const numero = formatearNumeroFactura(actualizado.puntoVenta, numeroAsignado)
 
     return tx.factura.create({
       data: {
         numero,
-        puntoVenta: comp.puntoVenta,
+        puntoVenta: actualizado.puntoVenta as number,
         tipo,
         ventaId,
         remitoId: remitoId ?? null,
@@ -133,6 +146,10 @@ export async function crearFactura(data: unknown) {
       },
     })
   })
+
+  if (facturaYaExistia) {
+    return { error: "Esta venta ya tiene una factura vigente" }
+  }
 
   revalidatePath("/facturacion")
   revalidatePath(`/ventas/${ventaId}`)

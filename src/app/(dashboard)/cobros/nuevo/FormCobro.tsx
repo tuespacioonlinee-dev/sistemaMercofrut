@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { registrarCobro } from "@/server/actions/cuentas"
 import { formatearPesos } from "@/lib/utils"
+import { generarClientRequestId, submitSeguro } from "@/lib/submit-helpers"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -32,6 +33,7 @@ export function FormCobro({ cuentas, preseleccionId }: Props) {
   const [concepto, setConcepto] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const idempotencyRef = useRef<string>(generarClientRequestId())
 
   const cuentaSeleccionada = useMemo(
     () => cuentas.find((c) => c.id === cuentaId) ?? null,
@@ -58,14 +60,18 @@ export function FormCobro({ cuentas, preseleccionId }: Props) {
     if (!concepto.trim()) return setError("Ingresá un concepto")
 
     setLoading(true)
-    const res = await registrarCobro(cuentaId, montoNum, concepto.trim())
-    setLoading(false)
-
-    if (res.error) {
-      setError(res.error)
-    } else {
+    try {
+      const res = await submitSeguro(() =>
+        registrarCobro(cuentaId, montoNum, concepto.trim(), idempotencyRef.current)
+      )
+      if (!res.ok) {
+        setError(res.error)
+        return
+      }
       router.push(`/cuentas/${cuentaId}`)
       router.refresh()
+    } finally {
+      setLoading(false)
     }
   }
 
