@@ -73,3 +73,32 @@ npm run onboard -- \
 ### Valores validos para condicionIva
 
 RESPONSABLE_INSCRIPTO, MONOTRIBUTO, EXENTO, CONSUMIDOR_FINAL, NO_RESPONSABLE
+
+## Migración de datos legacy
+
+### Prerrequisitos
+
+1. DB del cliente ya creada via `npm run onboard`
+2. Archivos de datos del cliente en formato `.xlsx` o `.csv`
+3. Env var `ANTHROPIC_API_KEY` en `.env`
+
+### Uso
+
+```bash
+npm run migrate-legacy -- \
+  --target="postgresql://user:pass@host/db" \
+  --productos="datos/productos.xlsx" \
+  --clientes="datos/clientes.csv" \
+  --proveedores="datos/proveedores.xlsx"
+```
+
+Los nombres de columnas en los archivos pueden ser cualquiera — la IA analiza los headers y propone un mapeo automáticamente. El operador confirma antes de importar.
+
+### Argumentos
+
+- `--target` (obligatorio): connection string de la DB del cliente
+- `--productos`: archivo con productos (código, nombre, categoría, unidad, precios, stock)
+- `--clientes`: archivo con clientes (nombre, documento, condición IVA, dirección, saldo)
+- `--proveedores`: archivo con proveedores (nombre, documento, condición IVA, dirección, saldo)
+
+Al menos uno de `--productos`, `--clientes` o `--proveedores` es obligatorio.
