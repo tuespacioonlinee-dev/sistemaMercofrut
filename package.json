@@ -20,7 +20,8 @@
     "restore": "tsx scripts/restore.ts",
     "onboard": "tsx scripts/onboard-client.ts",
     "migrate-legacy": "tsx scripts/migrate-legacy.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "validate": "tsx scripts/validate-daily.tsx"
   },
   "prisma": {
     "seed": "npm run seed"

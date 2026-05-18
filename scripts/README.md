@@ -74,6 +74,27 @@ npm run onboard -- \
 
 RESPONSABLE_INSCRIPTO, MONOTRIBUTO, EXENTO, CONSUMIDOR_FINAL, NO_RESPONSABLE
 
+## Validación de corrida en paralelo
+
+### Uso
+
+```bash
+npm run validate -- \
+  --target="postgresql://user:pass@host/db" \
+  --fecha="2026-05-18"
+```
+
+### Argumentos
+
+- `--target` (obligatorio): connection string de la DB del cliente
+- `--fecha` (opcional): fecha del reporte en formato YYYY-MM-DD (default: hoy)
+
+Genera un PDF `cierre-diario-YYYY-MM-DD.pdf` con 4 secciones:
+1. Caja diaria (saldo inicial, movimientos por categoría, arqueo)
+2. Ventas del día (listado con desglose contado vs CC)
+3. Stock con movimiento (ingresos, egresos, stock anterior y actual)
+4. Saldos cuenta corriente (débitos, créditos, saldo anterior y actual)
+
 ## Migración de datos legacy
 
 ### Prerrequisitos
