@@ -21,7 +21,8 @@
     "onboard": "tsx scripts/onboard-client.ts",
     "migrate-legacy": "tsx scripts/migrate-legacy.ts",
     "test:e2e": "playwright test",
-    "validate": "tsx scripts/validate-daily.tsx"
+    "validate": "tsx scripts/validate-daily.tsx",
+    "manual": "tsx scripts/generate-manual.tsx"
   },
   "prisma": {
     "seed": "npm run seed"

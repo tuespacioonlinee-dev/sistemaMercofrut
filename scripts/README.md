@@ -123,3 +123,13 @@ Los nombres de columnas en los archivos pueden ser cualquiera — la IA analiza 
 - `--proveedores`: archivo con proveedores (nombre, documento, condición IVA, dirección, saldo)
 
 Al menos uno de `--productos`, `--clientes` o `--proveedores` es obligatorio.
+
+## Manual de usuario
+
+### Uso
+
+```bash
+npm run manual
+```
+
+Genera `manual-usuario-mercofrut.pdf` en el directorio actual. El PDF tiene 12 capítulos que cubren todo el sistema: login, caja, ventas, cobros, compras, pagos, productos, clientes, proveedores, stock, reportes y configuración.
