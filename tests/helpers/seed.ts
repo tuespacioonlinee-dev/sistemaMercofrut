@@ -86,7 +86,14 @@ export async function seedCajaAbierta(saldoInicial = 0) {
   })
 }
 
-/** Crea un producto con stock disponible. */
+/**
+ * Crea un producto con stock disponible.
+ * Devuelve también `unidadBase` para que el caller pueda seleccionar la unidad
+ * explícitamente en la UI.
+ *
+ * No crea `ProductoUnidad` alternativa: `crearVenta()` ya aplica factor=1 por
+ * defecto cuando el producto/unidad no tiene fila en ProductoUnidad.
+ */
 export async function seedProductoConStock(opts: {
   codigo: string
   nombre: string
@@ -107,12 +114,26 @@ export async function seedProductoConStock(opts: {
     },
   })
 
-  // ProductoUnidad: la unidad base con factor 1, así crearVenta() la encuentra.
-  await prismaTest.productoUnidad.create({
-    data: { productoId: producto.id, unidadId: unidad.id, factor: 1 },
-  })
+  return { ...producto, unidadBase: unidad }
+}
 
-  return producto
+/**
+ * Crea un cliente simple sin cuenta asociada (las cuentas las crea
+ * `crearVenta()` on-demand la primera vez que el cliente compra).
+ */
+export async function seedClienteSinSaldo(opts: {
+  nombreRazonSocial: string
+  documento: string
+  condicionIva?: "RESPONSABLE_INSCRIPTO" | "MONOTRIBUTO" | "EXENTO" | "CONSUMIDOR_FINAL" | "NO_RESPONSABLE"
+}) {
+  return prismaTest.cliente.create({
+    data: {
+      nombreRazonSocial: opts.nombreRazonSocial,
+      tipoDocumento: "CUIT",
+      documento: opts.documento,
+      condicionIva: opts.condicionIva ?? "RESPONSABLE_INSCRIPTO",
+    },
+  })
 }
 
 /**
