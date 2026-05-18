@@ -10,6 +10,7 @@ async function main() {
   const fileName = buildFileName();
   let filePath: string | null = null;
 
+  let step = "pg_dump";
   try {
     console.log("=== Backup Mercofrut ===");
     console.log(`Archivo: ${fileName}`);
@@ -17,6 +18,7 @@ async function main() {
     console.log("\n1. Ejecutando pg_dump...");
     filePath = pgDump(config.directUrl, fileName);
 
+    step = "upload a Drive";
     console.log("\n2. Subiendo a Google Drive...");
     await uploadToDrive(
       filePath,
@@ -24,6 +26,7 @@ async function main() {
       config.googleServiceAccountJson
     );
 
+    step = "cleanup backups viejos";
     console.log("\n3. Limpiando backups viejos...");
     const deleted = await cleanupOldBackups(
       config.googleDriveFolderId,
@@ -39,7 +42,7 @@ async function main() {
       await notifyError(
         config.resendApiKey,
         config.alertEmail,
-        "backup",
+        step,
         err
       );
     } catch {

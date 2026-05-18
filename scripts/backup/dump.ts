@@ -1,6 +1,6 @@
 // scripts/backup/dump.ts
 import { execSync } from "child_process";
-import { existsSync, mkdirSync } from "fs";
+import { existsSync, mkdirSync, statSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
@@ -13,15 +13,16 @@ export function pgDump(connectionUrl: string, fileName: string): string {
   const outPath = join(outDir, fileName);
 
   execSync(
-    `pg_dump "${connectionUrl}" --format=plain --no-owner --no-acl | gzip > "${outPath}"`,
+    `pg_dump --format=plain --no-owner --no-acl | gzip > "${outPath}"`,
     {
+      env: { ...process.env, PGDATABASE: connectionUrl },
       stdio: ["ignore", "ignore", "pipe"],
-      timeout: 5 * 60 * 1000, // 5 min max
+      timeout: 5 * 60 * 1000,
     }
   );
 
-  const stats = execSync(`ls -lh "${outPath}"`, { encoding: "utf-8" });
-  console.log(`Dump creado: ${stats.trim()}`);
+  const size = statSync(outPath).size;
+  console.log(`Dump creado: ${outPath} (${(size / 1024 / 1024).toFixed(2)} MB)`);
 
   return outPath;
 }

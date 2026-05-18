@@ -96,26 +96,27 @@ async function downloadFromDrive(date: string): Promise<string> {
 
 function restore(filePath: string, targetUrl: string) {
   console.log(`Restaurando ${filePath} en la DB destino...`);
-  execSync(`gunzip -c "${filePath}" | psql "${targetUrl}"`, {
+  execSync(`gunzip -c "${filePath}" | psql`, {
+    env: { ...process.env, PGDATABASE: targetUrl },
     stdio: ["ignore", "pipe", "pipe"],
-    timeout: 10 * 60 * 1000, // 10 min max
+    timeout: 10 * 60 * 1000,
   });
   console.log("Restore completado.");
 }
 
 function verify(targetUrl: string) {
   console.log("\nVerificacion:");
+  const pgEnv = { ...process.env, PGDATABASE: targetUrl };
 
   const tableCheck = execSync(
-    `psql "${targetUrl}" -t -c "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename"`,
-    { encoding: "utf-8" }
+    `psql -t -c "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename"`,
+    { encoding: "utf-8", env: pgEnv }
   );
   const existingTables = tableCheck
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean);
 
-  // Prisma uses quoted PascalCase for table names
   const missing = TABLES.filter(
     (t) => !existingTables.includes(t) && !existingTables.includes(`"${t}"`)
   );
@@ -125,17 +126,19 @@ function verify(targetUrl: string) {
     console.log(`  Todas las ${TABLES.length} tablas presentes`);
   }
 
+  const countQuery = TABLES.map(
+    (t) => `SELECT '${t}' AS tabla, count(*)::text AS n FROM "${t}"`
+  ).join(" UNION ALL ");
+
+  const counts = execSync(`psql -t -c "${countQuery}"`, {
+    encoding: "utf-8",
+    env: pgEnv,
+  });
+
   console.log("\n  Conteo de registros:");
-  for (const table of TABLES) {
-    try {
-      const count = execSync(
-        `psql "${targetUrl}" -t -c "SELECT count(*) FROM \\"${table}\\""`,
-        { encoding: "utf-8" }
-      ).trim();
-      console.log(`    ${table}: ${count}`);
-    } catch {
-      console.log(`    ${table}: ERROR al contar`);
-    }
+  for (const line of counts.split("\n").filter((l) => l.trim())) {
+    const [tabla, n] = line.split("|").map((s) => s.trim());
+    if (tabla) console.log(`    ${tabla}: ${n}`);
   }
 
   console.log("\n=== Restore OK ===");
