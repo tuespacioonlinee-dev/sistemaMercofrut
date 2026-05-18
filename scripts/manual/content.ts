@@ -216,4 +216,206 @@ export const capitulos: Capitulo[] = [
       },
     ],
   },
+  {
+    numero: 7,
+    titulo: "Productos",
+    secciones: [
+      {
+        titulo: "Agregar un producto",
+        parrafos: [
+          "Antes de poder vender o comprar un producto, tenés que cargarlo en el sistema.",
+        ],
+        pasos: [
+          { texto: "Hacé click en \"Productos\" en el menú." },
+          { texto: "Hacé click en \"Nuevo producto\"." },
+          { texto: "Completá el \"Código\" (por ejemplo: MAN-001). Tiene que ser único." },
+          { texto: "Completá el \"Nombre\" (por ejemplo: Manzana Red)." },
+          { texto: "Elegí la \"Categoría\" de la lista (por ejemplo: Frutas). Si no existe, primero tenés que crearla en Categorías." },
+          { texto: "Elegí la \"Unidad base\" (por ejemplo: Kilogramo). Si no existe, primero creala en Unidades." },
+          { texto: "Poné el \"Precio de venta\" (lo que le cobrás al cliente)." },
+          { texto: "Poné el \"Precio de compra\" (lo que te cobra el proveedor). Es opcional." },
+          { texto: "Si querés, poné un \"Stock mínimo\" para que el sistema te avise cuando quede poco." },
+          { texto: "Si el producto tiene fecha de vencimiento, activá \"Controla vencimiento\"." },
+          { texto: "Hacé click en \"Crear producto\"." },
+        ],
+      },
+      {
+        titulo: "Editar un producto",
+        parrafos: [
+          "Para editar un producto existente, hacé click en el producto en la lista. Se abre el formulario con los datos actuales. Modificá lo que necesites y hacé click en \"Guardar cambios\".",
+        ],
+      },
+      {
+        titulo: "Categorías",
+        parrafos: [
+          "Las categorías sirven para agrupar productos (por ejemplo: Frutas, Verduras, Lácteos).",
+          "Para gestionar categorías, hacé click en \"Categorías\" en el menú. Podés agregar nuevas o editar las existentes.",
+        ],
+      },
+      {
+        titulo: "Unidades de medida",
+        parrafos: [
+          "Las unidades definen cómo se mide cada producto (Kilogramo, Unidad, Cajón, etc.).",
+          "Para gestionar unidades, hacé click en \"Unidades\" en el menú. Podés agregar nuevas o editar las existentes.",
+        ],
+      },
+      {
+        titulo: "Precios",
+        parrafos: [
+          "Para actualizar los precios de venta y compra de los productos, podés hacerlo desde la sección \"Precios\" en el menú. Ahí ves todos los productos con sus precios actuales y los podés modificar rápidamente.",
+        ],
+      },
+    ],
+  },
+  {
+    numero: 8,
+    titulo: "Clientes",
+    secciones: [
+      {
+        titulo: "Agregar un cliente",
+        parrafos: [
+          "Para venderle a alguien a cuenta corriente, primero tenés que cargarlo como cliente en el sistema.",
+        ],
+        pasos: [
+          { texto: "Hacé click en \"Clientes\" en el menú." },
+          { texto: "Hacé click en \"Nuevo cliente\"." },
+          { texto: "Completá \"Nombre / Razón Social\" (por ejemplo: Juan García o Frutas Pérez S.R.L.)." },
+          { texto: "Elegí el \"Tipo de documento\" (DNI, CUIT, etc.) y completá el \"Número de documento\"." },
+          { texto: "Elegí la \"Condición IVA\" del cliente (Consumidor Final, Monotributo, Responsable Inscripto, etc.)." },
+          { texto: "Completá los datos de contacto: teléfono, email, dirección, localidad (son opcionales)." },
+          { texto: "Hacé click en \"Crear cliente\"." },
+        ],
+      },
+      {
+        titulo: "Editar un cliente",
+        parrafos: [
+          "Para editar un cliente, buscalo en la lista de Clientes, hacé click en el botón de editar, modificá lo que necesites y hacé click en \"Guardar cambios\".",
+        ],
+      },
+      {
+        titulo: "Consultar cuenta corriente",
+        parrafos: [
+          "Para ver cuánto debe un cliente y su historial de movimientos:",
+        ],
+        pasos: [
+          { texto: "Andá a la sección de cuentas corrientes o consultá desde Reportes." },
+          { texto: "Buscá el cliente por nombre." },
+          { texto: "Vas a ver el saldo actual (lo que debe) y el historial de movimientos: ventas que le hiciste y cobros que te pagó." },
+        ],
+      },
+    ],
+  },
+  {
+    numero: 9,
+    titulo: "Proveedores",
+    secciones: [
+      {
+        titulo: "Agregar un proveedor",
+        parrafos: [
+          "Para registrar compras, primero tenés que cargar al proveedor.",
+        ],
+        pasos: [
+          { texto: "Hacé click en \"Proveedores\" en el menú." },
+          { texto: "Hacé click en \"Nuevo proveedor\"." },
+          { texto: "Completá \"Nombre / Razón Social\", \"Tipo de documento\", \"Número de documento\" y \"Condición IVA\"." },
+          { texto: "Completá los datos de contacto opcionales (teléfono, email, dirección)." },
+          { texto: "Hacé click en \"Crear proveedor\"." },
+        ],
+      },
+      {
+        titulo: "Editar un proveedor",
+        parrafos: [
+          "Para editar un proveedor, buscalo en la lista, hacé click en editar, modificá lo que necesites y guardá los cambios.",
+        ],
+      },
+    ],
+  },
+  {
+    numero: 10,
+    titulo: "Stock",
+    secciones: [
+      {
+        titulo: "Consultar stock",
+        parrafos: [
+          "Para ver cuánto tenés de cada producto:",
+        ],
+        pasos: [
+          { texto: "Hacé click en \"Stock\" en el menú." },
+          { texto: "Vas a ver la lista de todos los productos con su stock actual." },
+          { texto: "Cada producto tiene un estado: \"OK\" (verde), \"Bajo mínimo\" (amarillo) o \"Sin stock\" (rojo)." },
+          { texto: "Podés filtrar por categoría o buscar un producto específico." },
+          { texto: "Si querés un PDF del stock, hacé click en \"Exportar PDF\"." },
+        ],
+      },
+      {
+        titulo: "El stock se actualiza solo",
+        parrafos: [
+          "No necesitás actualizar el stock manualmente. El sistema lo hace automáticamente cuando registrás una venta (baja el stock) o una compra (sube el stock).",
+          "Si necesitás hacer un ajuste manual (por ejemplo, por mercadería rota o un error de conteo), podés hacerlo desde los ajustes de stock.",
+        ],
+      },
+    ],
+  },
+  {
+    numero: 11,
+    titulo: "Reportes",
+    secciones: [
+      {
+        titulo: "Ver reportes",
+        parrafos: [
+          "Los reportes te dan un resumen de cómo va el negocio. Hacé click en \"Reportes\" en el menú.",
+          "Vas a ver tarjetas de acceso rápido: Caja diaria, CTA CTE (cuentas corrientes), Clientes, Proveedores, Stock diario y Stock resumido.",
+        ],
+      },
+      {
+        titulo: "Reporte de caja",
+        parrafos: [
+          "El reporte de caja muestra todos los movimientos del día: ingresos, egresos, debe y haber. Te sirve para ver cuánto entró y cuánto salió.",
+        ],
+      },
+      {
+        titulo: "Reporte de stock diario",
+        parrafos: [
+          "Muestra los movimientos de stock del día por producto: cuánto entró (compras) y cuánto salió (ventas). Útil para comparar con el conteo físico.",
+        ],
+      },
+      {
+        titulo: "Reporte de stock resumido",
+        parrafos: [
+          "Muestra el total de ingresos y egresos por producto en un período. También ves el valor total del stock valorizado (cuánto vale toda la mercadería).",
+        ],
+      },
+      {
+        titulo: "Información general",
+        parrafos: [
+          "La pantalla de Reportes también muestra información útil: el valor total del stock, cuántos productos tienen stock, cuántos están bajo el mínimo, cuántos están sin stock, y un resumen de compras por mes y por proveedor.",
+        ],
+      },
+    ],
+  },
+  {
+    numero: 12,
+    titulo: "Configuración",
+    secciones: [
+      {
+        titulo: "Parámetros del negocio",
+        parrafos: [
+          "Los parámetros del negocio son los datos de tu puesto que aparecen en los remitos y facturas. Solo el administrador puede cambiarlos.",
+        ],
+        pasos: [
+          { texto: "Hacé click en \"Parámetros\" en el menú (solo visible para administradores)." },
+          { texto: "Completá o modificá: \"Nombre de fantasía\" (como se llama tu puesto), \"Razón social\" (nombre legal), \"CUIT\", \"Condición IVA\"." },
+          { texto: "Completá la dirección, localidad, teléfono y email." },
+          { texto: "Hacé click en \"Guardar parámetros\"." },
+        ],
+      },
+      {
+        titulo: "Numeración de comprobantes",
+        parrafos: [
+          "Si necesitás corregir la numeración de remitos o facturas (por ejemplo, porque hubo un error), podés hacerlo desde la sección \"Numeración de comprobantes\" en la misma página de Parámetros.",
+          "Ahí podés cambiar el punto de venta y el próximo número de remito, factura A, factura B y factura C. Solo usá esto si sabés lo que estás haciendo o te lo indicó el administrador.",
+        ],
+      },
+    ],
+  },
 ];
