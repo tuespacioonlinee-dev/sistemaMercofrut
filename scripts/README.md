@@ -48,3 +48,28 @@ npm run backup
 npm run restore -- 2026-05-18 --target="postgresql://user:pass@host/db"
 npm run restore -- ./archivo.sql.gz --target="postgresql://user:pass@host/db"
 ```
+
+## Onboarding de cliente nuevo
+
+### Prerrequisitos
+
+1. Dominio `mercofrut.com` apuntado a Vercel
+2. DNS wildcard: `*.mercofrut.com` como CNAME a `cname.vercel-dns.com`
+3. Env vars en `.env`: `NEON_API_KEY`, `VERCEL_TOKEN`, `GITHUB_TOKEN`
+
+### Uso
+
+```bash
+npm run onboard -- \
+  --nombre="Fruteria Don Pedro" \
+  --cuit="20-12345678-9" \
+  --condicionIva="MONOTRIBUTO" \
+  --direccion="Puesto 42, Mercado Central" \
+  --email="pedro@mail.com" \
+  --password="pedrito2026" \
+  --subdominio="donpedro"
+```
+
+### Valores validos para condicionIva
+
+RESPONSABLE_INSCRIPTO, MONOTRIBUTO, EXENTO, CONSUMIDOR_FINAL, NO_RESPONSABLE
