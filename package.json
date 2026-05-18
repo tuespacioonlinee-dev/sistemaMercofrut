@@ -19,7 +19,8 @@
     "backup": "tsx scripts/backup.ts",
     "restore": "tsx scripts/restore.ts",
     "onboard": "tsx scripts/onboard-client.ts",
-    "migrate-legacy": "tsx scripts/migrate-legacy.ts"
+    "migrate-legacy": "tsx scripts/migrate-legacy.ts",
+    "test:e2e": "playwright test"
   },
   "prisma": {
     "seed": "npm run seed"
