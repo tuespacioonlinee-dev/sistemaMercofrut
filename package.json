@@ -17,7 +17,8 @@
     "test:e2e:report": "playwright show-report",
     "postinstall": "prisma generate",
     "backup": "tsx scripts/backup.ts",
-    "restore": "tsx scripts/restore.ts"
+    "restore": "tsx scripts/restore.ts",
+    "onboard": "tsx scripts/onboard-client.ts"
   },
   "prisma": {
     "seed": "npm run seed"
