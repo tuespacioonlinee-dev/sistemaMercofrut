@@ -87,6 +87,32 @@ export async function seedCajaAbierta(saldoInicial = 0) {
 }
 
 /**
+ * Inserta un MovimientoCaja directo en la caja indicada. Útil para sembrar
+ * el estado previo a un cierre sin pasar por todo el flujo de ventas/cobros.
+ */
+export async function seedMovimientoCaja(opts: {
+  cajaId: string
+  tipo: "CONTADO_HABER" | "CONTADO_DEBE" | "CC_HABER" | "CC_DEBE"
+  categoria:
+    | "VENTA_CONTADO" | "COBRO_CLIENTE" | "PAGO_PROVEEDOR"
+    | "COMPRA_CONTADO" | "GASTO" | "RETIRO" | "DEPOSITO" | "OTRO"
+  monto: number
+  descripcion: string
+}) {
+  const admin = await obtenerAdmin()
+  return prismaTest.movimientoCaja.create({
+    data: {
+      cajaId: opts.cajaId,
+      tipo: opts.tipo,
+      categoria: opts.categoria,
+      monto: opts.monto,
+      descripcion: opts.descripcion,
+      usuarioId: admin.id,
+    },
+  })
+}
+
+/**
  * Crea un producto con stock disponible.
  * Devuelve también `unidadBase` para que el caller pueda seleccionar la unidad
  * explícitamente en la UI.
