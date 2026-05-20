@@ -130,7 +130,7 @@ export function Sidebar() {
     <aside className="flex flex-col w-60 min-h-screen bg-slate-900 text-slate-100 shrink-0">
       {/* Logo */}
       <div className="px-6 py-5 border-b border-slate-700">
-        <p className="text-lg font-bold tracking-tight">Sistema Cono</p>
+        <p className="text-lg font-bold tracking-tight">JDC Mercofrut</p>
         <p className="text-xs text-slate-400">Mercofrut Tucumán</p>
       </div>
 

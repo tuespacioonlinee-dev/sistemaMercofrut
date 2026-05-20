@@ -18,7 +18,7 @@ export interface EmpresaInfo {
 }
 
 const DEFAULTS: EmpresaInfo = {
-  nombreFantasia: process.env.NEXT_PUBLIC_NEGOCIO_NOMBRE ?? "Mi Empresa",
+  nombreFantasia: process.env.NEXT_PUBLIC_NEGOCIO_NOMBRE ?? "JDC Mercofrut",
   razonSocial:    process.env.NEGOCIO_RAZON_SOCIAL ?? "",
   cuit:           process.env.NEGOCIO_CUIT ?? "",
   direccion:      process.env.NEGOCIO_DIRECCION ?? "",

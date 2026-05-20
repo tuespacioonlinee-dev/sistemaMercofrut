@@ -63,7 +63,7 @@ async function seedParametrosNegocio() {
 
   const p = await prisma.parametrosNegocio.create({
     data: {
-      nombreFantasia: env("NEXT_PUBLIC_NEGOCIO_NOMBRE", "Mi Empresa"),
+      nombreFantasia: env("NEXT_PUBLIC_NEGOCIO_NOMBRE", "JDC Mercofrut"),
       razonSocial:    env("NEGOCIO_RAZON_SOCIAL",      "A completar"),
       cuit:           env("NEGOCIO_CUIT",              "00-00000000-0"),
       condicionIva,
