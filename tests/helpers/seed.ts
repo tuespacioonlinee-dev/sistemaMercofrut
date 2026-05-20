@@ -151,6 +151,11 @@ export async function seedClienteSinSaldo(opts: {
   nombreRazonSocial: string
   documento: string
   condicionIva?: "RESPONSABLE_INSCRIPTO" | "MONOTRIBUTO" | "EXENTO" | "CONSUMIDOR_FINAL" | "NO_RESPONSABLE"
+  codigo?: string | null
+  direccion?: string | null
+  localidad?: string | null
+  provincia?: string | null
+  telefono?: string | null
 }) {
   return prismaTest.cliente.create({
     data: {
@@ -158,8 +163,94 @@ export async function seedClienteSinSaldo(opts: {
       tipoDocumento: "CUIT",
       documento: opts.documento,
       condicionIva: opts.condicionIva ?? "RESPONSABLE_INSCRIPTO",
+      codigo: opts.codigo ?? null,
+      direccion: opts.direccion ?? null,
+      localidad: opts.localidad ?? null,
+      provincia: opts.provincia ?? null,
+      telefono: opts.telefono ?? null,
     },
   })
+}
+
+/** Crea un proveedor sin cuenta (idem seedClienteSinSaldo pero del lado proveedor). */
+export async function seedProveedorSinSaldo(opts: {
+  nombreRazonSocial: string
+  documento: string
+  codigo?: string | null
+  direccion?: string | null
+  localidad?: string | null
+  provincia?: string | null
+  telefono?: string | null
+}) {
+  return prismaTest.proveedor.create({
+    data: {
+      nombreRazonSocial: opts.nombreRazonSocial,
+      tipoDocumento: "CUIT",
+      documento: opts.documento,
+      condicionIva: "RESPONSABLE_INSCRIPTO",
+      codigo: opts.codigo ?? null,
+      direccion: opts.direccion ?? null,
+      localidad: opts.localidad ?? null,
+      provincia: opts.provincia ?? null,
+      telefono: opts.telefono ?? null,
+    },
+  })
+}
+
+/**
+ * Crea un proveedor con cuenta CC y saldo (a favor del proveedor, le debemos).
+ */
+export async function seedProveedorConSaldoCC(opts: {
+  nombreRazonSocial: string
+  documento: string
+  saldoDeudor: number
+  codigo?: string | null
+  direccion?: string | null
+  localidad?: string | null
+  provincia?: string | null
+  telefono?: string | null
+}) {
+  const admin = await obtenerAdmin()
+
+  const proveedor = await prismaTest.proveedor.create({
+    data: {
+      nombreRazonSocial: opts.nombreRazonSocial,
+      tipoDocumento: "CUIT",
+      documento: opts.documento,
+      condicionIva: "RESPONSABLE_INSCRIPTO",
+      codigo: opts.codigo ?? null,
+      direccion: opts.direccion ?? null,
+      localidad: opts.localidad ?? null,
+      provincia: opts.provincia ?? null,
+      telefono: opts.telefono ?? null,
+    },
+  })
+
+  const cuenta = await prismaTest.cuenta.create({
+    data: {
+      nombre: `Cta. Cte. - ${opts.nombreRazonSocial}`,
+      tipo: "CORRIENTE",
+      titular: "PROVEEDOR",
+      proveedorId: proveedor.id,
+      saldo: opts.saldoDeudor,
+    },
+  })
+
+  if (opts.saldoDeudor > 0) {
+    await prismaTest.movimientoCuenta.create({
+      data: {
+        cuentaId: cuenta.id,
+        tipo: "DEBE",
+        monto: opts.saldoDeudor,
+        saldoAnterior: 0,
+        saldoPosterior: opts.saldoDeudor,
+        descripcion: "Saldo inicial (seed)",
+        usuarioId: admin.id,
+      },
+    })
+  }
+
+  return { proveedor, cuenta }
 }
 
 /**
@@ -170,6 +261,11 @@ export async function seedClienteConSaldoCC(opts: {
   nombreRazonSocial: string
   documento: string
   saldoDeudor: number
+  codigo?: string | null
+  direccion?: string | null
+  localidad?: string | null
+  provincia?: string | null
+  telefono?: string | null
 }) {
   const admin = await obtenerAdmin()
 
@@ -179,6 +275,11 @@ export async function seedClienteConSaldoCC(opts: {
       tipoDocumento: "CUIT",
       documento: opts.documento,
       condicionIva: "RESPONSABLE_INSCRIPTO",
+      codigo: opts.codigo ?? null,
+      direccion: opts.direccion ?? null,
+      localidad: opts.localidad ?? null,
+      provincia: opts.provincia ?? null,
+      telefono: opts.telefono ?? null,
     },
   })
 

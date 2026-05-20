@@ -52,6 +52,11 @@ const columns = [
     cell:   (i) => i.getValue() ?? <span className="text-muted-foreground">—</span>,
     footer: () => null,
   }),
+  col.accessor("provincia", {
+    header: "Provincia",
+    cell:   (i) => i.getValue() ?? <span className="text-muted-foreground">—</span>,
+    footer: () => null,
+  }),
   col.accessor("localidad", {
     header: "Localidad",
     cell:   (i) => i.getValue() ?? <span className="text-muted-foreground">—</span>,

@@ -605,6 +605,7 @@ export type FilaListadoPersona = {
   nombre:       string
   cuit:         string
   direccion:    string | null
+  provincia:    string | null
   localidad:    string | null
   telefono:     string | null
   saldo:        number
@@ -619,6 +620,7 @@ export async function obtenerListadoClientes(soloConSaldo = false): Promise<Fila
       nombreRazonSocial:true,
       documento:        true,
       direccion:        true,
+      provincia:        true,
       localidad:        true,
       telefono:         true,
       cuentas: {
@@ -635,6 +637,7 @@ export async function obtenerListadoClientes(soloConSaldo = false): Promise<Fila
     nombre:    c.nombreRazonSocial,
     cuit:      c.documento,
     direccion: c.direccion,
+    provincia: c.provincia,
     localidad: c.localidad,
     telefono:  c.telefono,
     saldo:     c.cuentas.reduce((acc, cu) => acc + Number(cu.saldo), 0),
@@ -652,6 +655,7 @@ export async function obtenerListadoProveedores(soloConSaldo = false): Promise<F
       nombreRazonSocial:true,
       documento:        true,
       direccion:        true,
+      provincia:        true,
       localidad:        true,
       telefono:         true,
       cuentas: {
@@ -668,6 +672,7 @@ export async function obtenerListadoProveedores(soloConSaldo = false): Promise<F
     nombre:    p.nombreRazonSocial,
     cuit:      p.documento,
     direccion: p.direccion,
+    provincia: p.provincia,
     localidad: p.localidad,
     telefono:  p.telefono,
     saldo:     p.cuentas.reduce((acc, cu) => acc + Number(cu.saldo), 0),
