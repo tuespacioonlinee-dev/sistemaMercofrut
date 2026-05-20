@@ -2,7 +2,9 @@
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer"
 import type { FilaListadoPersona } from "@/server/actions/reportes"
 
-const W = { idx: 22, cod: 38, nombre: 180, cuit: 70, dir: 130, loc: 85, tel: 65, saldo: 65 }
+// Anchos en puntos PDF. A4 landscape menos padding 40 = 802 disponibles.
+// Total = 22+38+170+70+115+78+78+62+65 = 698 (queda margen, OK).
+const W = { idx: 22, cod: 38, nombre: 170, cuit: 70, dir: 115, prov: 78, loc: 78, tel: 62, saldo: 65 }
 
 const s = StyleSheet.create({
   page:  { padding: 20, fontSize: 8, fontFamily: "Helvetica" },
@@ -57,6 +59,7 @@ export function ListadoPersonasPDF({ titulo, subtitulo, filas, mostrarSaldoTotal
             <Text style={[s.th, { width: W.nombre }]}>Nombre</Text>
             <Text style={[s.th, { width: W.cuit }]}>CUIT</Text>
             <Text style={[s.th, { width: W.dir }]}>Dirección</Text>
+            <Text style={[s.th, { width: W.prov }]}>Provincia</Text>
             <Text style={[s.th, { width: W.loc }]}>Localidad</Text>
             <Text style={[s.th, { width: W.tel }]}>Teléfono</Text>
             <Text style={[s.th, { width: W.saldo, textAlign: "right" }]}>Saldo</Text>
@@ -70,6 +73,7 @@ export function ListadoPersonasPDF({ titulo, subtitulo, filas, mostrarSaldoTotal
               <Text style={[s.td, { width: W.nombre }]}>{f.nombre}</Text>
               <Text style={[s.td, { width: W.cuit }]}>{f.cuit}</Text>
               <Text style={[s.td, { width: W.dir }]}>{f.direccion ?? "—"}</Text>
+              <Text style={[s.td, { width: W.prov }]}>{f.provincia ?? "—"}</Text>
               <Text style={[s.td, { width: W.loc }]}>{f.localidad ?? "—"}</Text>
               <Text style={[s.td, { width: W.tel }]}>{f.telefono ?? "—"}</Text>
               <Text style={[s.td, { width: W.saldo, textAlign: "right" }]}>
@@ -81,7 +85,7 @@ export function ListadoPersonasPDF({ titulo, subtitulo, filas, mostrarSaldoTotal
           {/* Pie (solo en reportes con saldo) */}
           {mostrarSaldoTotal && (
             <View style={s.row}>
-              <Text style={[s.tfoot, { width: W.idx + W.cod + W.nombre + W.cuit + W.dir + W.loc + W.tel }]}>
+              <Text style={[s.tfoot, { width: W.idx + W.cod + W.nombre + W.cuit + W.dir + W.prov + W.loc + W.tel }]}>
                 Saldo Total
               </Text>
               <Text style={[s.tfoot, { width: W.saldo, textAlign: "right" }]}>

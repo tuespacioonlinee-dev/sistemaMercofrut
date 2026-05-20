@@ -42,6 +42,9 @@ yarn-error.log*
 /playwright/.cache/
 /playwright/.auth/
 
+# PR draft local
+.pr-body.md
+
 # claude code settings (can contain tokens)
 .claude/
 
