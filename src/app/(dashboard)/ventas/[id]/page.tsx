@@ -1,10 +1,11 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { obtenerVentaPorId } from "@/server/actions/ventas"
+import { obtenerNotasPorVenta } from "@/server/actions/notas"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { formatearPesos, cn } from "@/lib/utils"
-import { ChevronLeft, FileText } from "lucide-react"
+import { ChevronLeft, FileText, FileMinus, FilePlus } from "lucide-react"
 
 interface Props {
   params: Promise<{ id: string }>
@@ -28,10 +29,14 @@ const estadoRemitoBadge: Record<string, { label: string; className: string }> = 
 
 export default async function DetalleVentaPage({ params }: Props) {
   const { id } = await params
-  const venta = await obtenerVentaPorId(id)
+  const [venta, notas] = await Promise.all([
+    obtenerVentaPorId(id),
+    obtenerNotasPorVenta(id),
+  ])
   if (!venta) notFound()
 
   const anulada = venta.estado === "ANULADA"
+  const puedeEmitirNotas = !anulada
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -175,6 +180,59 @@ export default async function DetalleVentaPage({ params }: Props) {
         <div className="p-4 border border-destructive/30 rounded-lg bg-destructive/5">
           <p className="text-xs text-destructive font-semibold uppercase tracking-wide mb-1">Motivo de anulación</p>
           <p className="text-sm text-destructive">{venta.motivoAnulacion}</p>
+        </div>
+      )}
+
+      {/* Notas de crédito / débito vinculadas */}
+      {(notas.length > 0 || puedeEmitirNotas) && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+              Notas de crédito y débito
+            </p>
+            {puedeEmitirNotas && (
+              <div className="flex gap-2">
+                <Link
+                  href={`/notas/nueva?ventaId=${venta.id}&tipo=CREDITO`}
+                  className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+                >
+                  <FileMinus className="h-3.5 w-3.5 text-green-700" />
+                  Emitir NC
+                </Link>
+                <Link
+                  href={`/notas/nueva?ventaId=${venta.id}&tipo=DEBITO`}
+                  className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+                >
+                  <FilePlus className="h-3.5 w-3.5 text-orange-700" />
+                  Emitir ND
+                </Link>
+              </div>
+            )}
+          </div>
+          {notas.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">Sin notas emitidas todavía.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {notas.map((n) => (
+                <Link
+                  key={n.id}
+                  href={`/notas/${n.id}`}
+                  className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-2 font-mono")}
+                >
+                  {n.tipo === "CREDITO"
+                    ? <FileMinus className="h-3.5 w-3.5 text-green-700" />
+                    : <FilePlus className="h-3.5 w-3.5 text-orange-700" />}
+                  {n.numero}
+                  <span className="text-xs text-muted-foreground">
+                    {formatearPesos(Number(n.montoTotal))}
+                  </span>
+                  {n.estado === "ANULADA" && (
+                    <Badge variant="destructive" className="text-[10px] py-0">Anulada</Badge>
+                  )}
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

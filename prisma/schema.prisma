@@ -38,6 +38,7 @@ model Usuario {
   movimientosStock   MovimientoStock[]
   movimientosCaja    MovimientoCaja[]
   movimientosCuenta  MovimientoCuenta[]
+  notasEmitidas      NotaCreditoDebito[] @relation("NotaCreadaPor")
 
   @@index([email])
 }
@@ -72,6 +73,7 @@ model UnidadMedida {
   productosUnidades ProductoUnidad[]
   detallesVenta     DetalleVenta[]
   detallesCompra    DetalleCompra[]
+  lineasNotaCD      LineaNotaCreditoDebito[]
 }
 
 model Producto {
@@ -96,6 +98,7 @@ model Producto {
   detallesCompra       DetalleCompra[]
   lotes                LoteProducto[]
   precios              PrecioProducto[]
+  lineasNotaCD         LineaNotaCreditoDebito[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -258,6 +261,7 @@ model Cliente {
 
   cuentas     Cuenta[]
   ventas      Venta[]
+  notas       NotaCreditoDebito[]
   listaPrecio ListaPrecio? @relation(fields: [listaPrecioId], references: [id])
 
   @@index([nombreRazonSocial])
@@ -478,6 +482,7 @@ model Venta {
   detalles DetalleVenta[]
   remitos  Remito[]
   facturas Factura[]
+  notas    NotaCreditoDebito[]
 
   @@index([fecha])
   @@index([clienteId])
@@ -652,6 +657,78 @@ model Factura {
   @@index([ventaId])
   @@index([fechaEmision])
   @@index([cae])
+}
+
+// ============================================================================
+// NOTAS DE CRÉDITO Y DÉBITO (Bloque B)
+// ============================================================================
+//
+// Notas comerciales (no fiscales) emitidas contra una Venta existente.
+// - Nota de CRÉDITO: resta deuda al cliente, opcionalmente devuelve stock.
+// - Nota de DÉBITO: suma deuda al cliente (cargo adicional, sin stock).
+// Cuando se implemente facturación real, este modelo se extenderá con un
+// `facturaOrigenId` opcional sin breaking change.
+
+enum TipoNota {
+  CREDITO
+  DEBITO
+}
+
+enum EstadoNota {
+  EMITIDA
+  ANULADA
+}
+
+model NotaCreditoDebito {
+  id              String           @id @default(cuid())
+  tipo            TipoNota
+  letra           LetraComprobante
+  numero          String           @unique
+  puntoVenta      Int
+  fecha           DateTime         @default(now())
+  ventaOrigenId   String
+  clienteId       String
+  motivo          String
+  montoTotal      Decimal          @db.Decimal(14, 2)
+  estado          EstadoNota       @default(EMITIDA)
+  creadaPorId     String
+  anuladaEn       DateTime?
+  motivoAnulacion String?
+  clientRequestId String?          @unique
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  ventaOrigen Venta   @relation(fields: [ventaOrigenId], references: [id])
+  cliente     Cliente @relation(fields: [clienteId],     references: [id])
+  creadaPor   Usuario @relation("NotaCreadaPor", fields: [creadaPorId], references: [id])
+
+  lineas LineaNotaCreditoDebito[]
+
+  @@index([ventaOrigenId])
+  @@index([clienteId])
+  @@index([fecha])
+  @@index([estado])
+}
+
+model LineaNotaCreditoDebito {
+  id                    String  @id @default(cuid())
+  notaId                String
+  productoId            String
+  unidadId              String
+  cantidad              Decimal @db.Decimal(12, 3)
+  cantidadBase          Decimal @db.Decimal(12, 3)
+  precioUnitario        Decimal @db.Decimal(12, 2)
+  subtotal              Decimal @db.Decimal(14, 2)
+  generaMovimientoStock Boolean @default(true)
+
+  nota     NotaCreditoDebito @relation(fields: [notaId], references: [id], onDelete: Cascade)
+  producto Producto          @relation(fields: [productoId], references: [id])
+  unidad   UnidadMedida      @relation(fields: [unidadId],   references: [id])
+
+  @@index([notaId])
+  @@index([productoId])
 }
 
 // ============================================================================
