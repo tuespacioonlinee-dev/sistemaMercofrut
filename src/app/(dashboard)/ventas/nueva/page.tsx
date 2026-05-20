@@ -7,7 +7,7 @@ import { crearVenta } from "@/server/actions/ventas"
 import { VentaInput } from "@/lib/validaciones/ventas"
 
 export default async function NuevaVentaPage() {
-  const [clientes, productosRaw, unidades] = await Promise.all([
+  const [clientesRaw, productosRaw, unidades] = await Promise.all([
     obtenerClientes(),
     prisma.producto.findMany({
       where: { activo: true, deletedAt: null },
@@ -16,6 +16,14 @@ export default async function NuevaVentaPage() {
     }),
     prisma.unidadMedida.findMany({ where: { activa: true }, orderBy: { nombre: "asc" } }),
   ])
+
+  // Proyección mínima para el Client Component — evita pasarle Decimals
+  // (maxCredito, saldoInicial) que React 19 advierte como no serializables.
+  const clientes = clientesRaw.map((c) => ({
+    id:                c.id,
+    nombreRazonSocial: c.nombreRazonSocial,
+    documento:         c.documento,
+  }))
 
   // Convertir Decimal a number para poder pasarlos al Client Component
   const productos = productosRaw.map((p) => ({

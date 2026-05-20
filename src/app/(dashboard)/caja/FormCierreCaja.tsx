@@ -148,12 +148,23 @@ export function FormCierreCaja({
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor="observaciones">Observaciones (opcional)</Label>
+        <Label htmlFor="observaciones">
+          {diferencia !== 0
+            ? <>Observaciones <span className="text-destructive">*</span></>
+            : <>Observaciones (opcional)</>}
+        </Label>
         <Input
           id="observaciones"
           {...register("observaciones")}
-          placeholder="Notas sobre el cierre..."
+          placeholder={diferencia !== 0 ? "Explicá el motivo de la diferencia..." : "Notas sobre el cierre..."}
+          aria-invalid={diferencia !== 0 ? undefined : "false"}
         />
+        {diferencia !== 0 && (
+          <p className="text-xs text-muted-foreground">
+            El arqueo no coincide con el saldo esperado. Indicá el motivo
+            (faltante, sobrante, vuelto extra, etc.) para poder cerrar la caja.
+          </p>
+        )}
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
