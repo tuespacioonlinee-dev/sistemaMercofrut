@@ -20,9 +20,13 @@ import bcrypt from "bcryptjs"
 
 const prisma = new PrismaClient()
 
+// Tratamos los placeholders del .env.example viejo como "no seteado" para
+// evitar que se cuelen valores como "Mi Empresa" o "A completar" en la DB.
+const PLACEHOLDERS = new Set(["", "Mi Empresa", "A completar", "00-00000000-0"])
+
 function env(key: string, fallback?: string): string {
-  const v = process.env[key]
-  if (v === undefined || v === "") return fallback ?? ""
+  const v = (process.env[key] ?? "").trim()
+  if (PLACEHOLDERS.has(v)) return fallback ?? ""
   return v
 }
 

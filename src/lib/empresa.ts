@@ -17,12 +17,23 @@ export interface EmpresaInfo {
   facturacionHabilitada: boolean
 }
 
+// Algunos valores del .env.example original eran placeholders ("Mi Empresa",
+// "A completar") que la gente suele copiar tal cual a Vercel sin actualizar.
+// Tratamos esos placeholders como "no seteado" para evitar que se queden
+// pegados en producción y se vea "Mi Empresa" en el login del cliente.
+const PLACEHOLDERS = new Set(["", "Mi Empresa", "A completar", "00-00000000-0"])
+
+function envOrDefault(envKey: string, fallback: string): string {
+  const raw = process.env[envKey]?.trim() ?? ""
+  return PLACEHOLDERS.has(raw) ? fallback : raw
+}
+
 const DEFAULTS: EmpresaInfo = {
-  nombreFantasia: process.env.NEXT_PUBLIC_NEGOCIO_NOMBRE ?? "JDC Mercofrut",
-  razonSocial:    process.env.NEGOCIO_RAZON_SOCIAL ?? "",
-  cuit:           process.env.NEGOCIO_CUIT ?? "",
-  direccion:      process.env.NEGOCIO_DIRECCION ?? "",
-  localidad:      process.env.NEGOCIO_LOCALIDAD ?? "",
+  nombreFantasia: envOrDefault("NEXT_PUBLIC_NEGOCIO_NOMBRE", "JDC Mercofrut"),
+  razonSocial:    envOrDefault("NEGOCIO_RAZON_SOCIAL",       ""),
+  cuit:           envOrDefault("NEGOCIO_CUIT",               ""),
+  direccion:      envOrDefault("NEGOCIO_DIRECCION",          ""),
+  localidad:      envOrDefault("NEGOCIO_LOCALIDAD",          ""),
   telefono:       null,
   email:          null,
   logoUrl:        null,
