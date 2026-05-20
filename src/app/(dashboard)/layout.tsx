@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { NavLink } from "@/components/shared/NavLink"
 import { LogoutButton } from "@/components/shared/LogoutButton"
 import { Toaster } from "@/components/ui/sonner"
+import { getEmpresa } from "@/lib/empresa"
 import {
   Users,
   ShoppingCart,
@@ -29,6 +30,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const session = await auth()
   if (!session) redirect("/login")
 
+  const empresa = await getEmpresa()
+
   return (
     <div className="flex min-h-screen bg-background">
       <aside className="fixed inset-y-0 left-0 z-50 w-64 border-r bg-sidebar flex flex-col">
@@ -36,8 +39,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <div className="flex items-center gap-2 px-6 py-5 border-b">
           <Leaf className="h-6 w-6 text-primary shrink-0" />
           <div className="leading-tight">
-            <p className="text-sm font-bold text-sidebar-foreground">Sistema Cono</p>
-            <p className="text-xs text-muted-foreground">Mercofrut Tucumán</p>
+            <p className="text-sm font-bold text-sidebar-foreground">{empresa.nombreFantasia}</p>
+            {empresa.localidad && (
+              <p className="text-xs text-muted-foreground">{empresa.localidad}</p>
+            )}
           </div>
         </div>
 
@@ -70,6 +75,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <NavLink href="/unidades" icon={<Ruler />}>Unidades</NavLink>
           <NavLink href="/proveedores" icon={<Truck />}>Proveedores</NavLink>
           <NavLink href="/compras" icon={<ShoppingBag />}>Compras</NavLink>
+          <NavLink href="/listas-precios" icon={<Tag />}>Listas de precios</NavLink>
 
           <Separator className="my-3" />
 

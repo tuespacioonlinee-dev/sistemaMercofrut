@@ -1,6 +1,7 @@
 import { renderToBuffer } from "@react-pdf/renderer"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { getEmpresa } from "@/lib/empresa"
 import { ComprasPDF } from "@/components/pdf/ComprasPDF"
 import { format, startOfMonth, subMonths } from "date-fns"
 import { es } from "date-fns/locale"
@@ -8,6 +9,8 @@ import { es } from "date-fns/locale"
 export async function GET(request: Request) {
   const session = await auth()
   if (!session) return new Response("No autorizado", { status: 401 })
+
+  const empresa = await getEmpresa()
 
   const { searchParams } = new URL(request.url)
   const meses = Math.min(Number(searchParams.get("meses") ?? "1"), 12)
@@ -43,7 +46,13 @@ export async function GET(request: Request) {
   const filename = `compras-${format(new Date(), "yyyy-MM")}.pdf`
 
   const buffer = await renderToBuffer(
-    <ComprasPDF compras={compras} periodo={periodoLabel} totalPeriodo={totalPeriodo} fecha={fechaStr} />
+    <ComprasPDF
+      compras={compras}
+      periodo={periodoLabel}
+      totalPeriodo={totalPeriodo}
+      fecha={fechaStr}
+      empresa={{ nombreFantasia: empresa.nombreFantasia, localidad: empresa.localidad }}
+    />
   )
 
   return new Response(new Uint8Array(buffer), {

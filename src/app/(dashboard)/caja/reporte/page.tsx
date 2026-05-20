@@ -87,7 +87,7 @@ export default async function ReporteCajaPage({ searchParams }: Props) {
 
         {/* Encabezado */}
         <div className="text-center border-b pb-4">
-          <p className="text-lg font-bold">{params?.nombreFantasia ?? "Sistema Cono"}</p>
+          <p className="text-lg font-bold">{params?.nombreFantasia ?? "Mi Empresa"}</p>
           {params?.razonSocial && <p className="text-sm text-muted-foreground">{params.razonSocial} — CUIT {params.cuit}</p>}
           {params?.direccion && <p className="text-xs text-muted-foreground">{params.direccion}, {params.localidad}</p>}
           <p className="text-xl font-bold mt-3">Reporte de Caja Diaria</p>
@@ -251,8 +251,13 @@ export default async function ReporteCajaPage({ searchParams }: Props) {
           {new Date().toLocaleString("es-AR", {
             day: "2-digit", month: "2-digit", year: "numeric",
             hour: "2-digit", minute: "2-digit",
-          })}{" "}
-          — Sistema Cono · Mercofrut Tucumán
+          })}
+          {params?.nombreFantasia && (
+            <>
+              {" "}— {params.nombreFantasia}
+              {params.localidad && <> · {params.localidad}</>}
+            </>
+          )}
         </div>
       </div>
     </div>

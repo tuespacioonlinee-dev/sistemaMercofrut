@@ -36,6 +36,7 @@ interface Props {
   periodo: string
   totalPeriodo: number
   fecha: string
+  empresa: { nombreFantasia: string; localidad: string }
 }
 
 const CONDICION: Record<string, string> = {
@@ -43,16 +44,17 @@ const CONDICION: Record<string, string> = {
   CUENTA_CORRIENTE: "Cta. Cte.",
 }
 
-export function ComprasPDF({ compras, periodo, totalPeriodo, fecha }: Props) {
+export function ComprasPDF({ compras, periodo, totalPeriodo, fecha, empresa }: Props) {
   const recibidas = compras.filter((c) => c.estado !== "ANULADA")
   const totalRecibidas = recibidas.reduce((acc, c) => acc + c.total, 0)
+  const sub = empresa.localidad ? `${empresa.nombreFantasia} — ${empresa.localidad}` : empresa.nombreFantasia
 
   return (
     <Document>
       <Page size="A4" style={s.page}>
         <View style={s.header}>
           <Text style={s.titulo}>Reporte de Compras</Text>
-          <Text style={s.subtitulo}>Sistema Cono — Mercofrut Tucumán · {periodo}</Text>
+          <Text style={s.subtitulo}>{sub} · {periodo}</Text>
           <Text style={s.fecha}>Generado el {fecha}</Text>
         </View>
 

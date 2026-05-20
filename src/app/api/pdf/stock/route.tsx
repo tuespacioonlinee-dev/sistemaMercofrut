@@ -1,6 +1,7 @@
 import { renderToBuffer } from "@react-pdf/renderer"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { getEmpresa } from "@/lib/empresa"
 import { StockPDF } from "@/components/pdf/StockPDF"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -8,6 +9,8 @@ import { es } from "date-fns/locale"
 export async function GET() {
   const session = await auth()
   if (!session) return new Response("No autorizado", { status: 401 })
+
+  const empresa = await getEmpresa()
 
   const productos = await prisma.producto.findMany({
     where: { activo: true, deletedAt: null },
@@ -45,7 +48,12 @@ export async function GET() {
   const filename = `stock-${format(new Date(), "yyyy-MM-dd")}.pdf`
 
   const buffer = await renderToBuffer(
-    <StockPDF items={items} totalValorizado={totalValorizado} fecha={fechaStr} />
+    <StockPDF
+      items={items}
+      totalValorizado={totalValorizado}
+      fecha={fechaStr}
+      empresa={{ nombreFantasia: empresa.nombreFantasia, localidad: empresa.localidad }}
+    />
   )
 
   return new Response(new Uint8Array(buffer), {

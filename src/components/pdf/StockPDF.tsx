@@ -37,15 +37,17 @@ interface Props {
   items: Item[]
   totalValorizado: number
   fecha: string
+  empresa: { nombreFantasia: string; localidad: string }
 }
 
-export function StockPDF({ items, totalValorizado, fecha }: Props) {
+export function StockPDF({ items, totalValorizado, fecha, empresa }: Props) {
+  const sub = empresa.localidad ? `${empresa.nombreFantasia} — ${empresa.localidad}` : empresa.nombreFantasia
   return (
     <Document>
       <Page size="A4" orientation="landscape" style={s.page}>
         <View style={s.header}>
           <Text style={s.titulo}>Lista de Stock</Text>
-          <Text style={s.subtitulo}>Sistema Cono — Mercofrut Tucumán</Text>
+          <Text style={s.subtitulo}>{sub}</Text>
           <Text style={s.fecha}>Generado el {fecha}</Text>
         </View>
 
