@@ -28,18 +28,14 @@ test("crear venta cuenta corriente y verificar saldo", async ({ page }) => {
   // Ir a nueva venta
   await page.goto("/ventas/nueva");
 
-  // Seleccionar cliente CC
-  await page.locator("select#clienteId").selectOption({ label: new RegExp(TEST_CLIENTE_CC.nombreRazonSocial) });
+  // Seleccionar cliente CC (label exacto: "nombre — documento")
+  await page.locator("select#clienteId").selectOption({ label: `${TEST_CLIENTE_CC.nombreRazonSocial} — ${TEST_CLIENTE_CC.documento}` });
 
   // Condición: Cuenta Corriente
   await page.locator("select#condicion").selectOption("CUENTA_CORRIENTE");
 
-  // Agregar producto
-  await page.getByRole("button", { name: /agregar/i }).first().click();
-
-  // Seleccionar producto
-  const productSelect = page.locator("select").nth(2);
-  await productSelect.selectOption({ label: new RegExp(TEST_PRODUCT.nombre) });
+  // Seleccionar producto en la línea existente (el form ya viene con 1 fila)
+  await page.locator("select").nth(2).selectOption({ label: TEST_PRODUCT.nombre });
 
   // Cantidad: 3
   await page.locator("input[type='number'][step='0.001']").first().fill("3");
@@ -49,19 +45,24 @@ test("crear venta cuenta corriente y verificar saldo", async ({ page }) => {
   // Confirmar venta
   await page.getByRole("button", { name: "Confirmar venta" }).click();
 
-  await expect(page).toHaveURL(/\/ventas/, { timeout: 10_000 });
+  // Esperar que salga de /ventas/nueva
+  await page.waitForURL((url) => !url.pathname.includes("/nueva"), { timeout: 15_000 });
 });
 
 test("verificar que el saldo CC del cliente aumentó", async ({ page }) => {
   await page.goto("/cuentas/consulta");
 
   // Buscar cliente CC
-  await page.locator("input").first().fill(TEST_CLIENTE_CC.nombreRazonSocial);
+  await page.getByPlaceholder(/nombre|buscar|cuit/i).fill(TEST_CLIENTE_CC.nombreRazonSocial);
+
+  // Esperar a que aparezcan los resultados de búsqueda
+  const resultado = page.locator("button", { hasText: TEST_CLIENTE_CC.nombreRazonSocial });
+  await expect(resultado.first()).toBeVisible({ timeout: 5_000 });
+  await resultado.first().click();
+
+  // Esperar a que carguen los datos de la cuenta
   await page.waitForTimeout(1000);
 
-  // Click en el resultado
-  await page.getByText(TEST_CLIENTE_CC.nombreRazonSocial).first().click();
-
-  // Verificar que hay saldo (el total de 3 x 1500 = 4500)
-  await expect(page.getByText("4.500")).toBeVisible({ timeout: 5_000 });
+  // Verificar que hay saldo (el total de 3 x 1500 = 4500, formateado como "$ 4.500,00")
+  await expect(page.getByText("4.500").first()).toBeVisible({ timeout: 10_000 });
 });

@@ -42,6 +42,72 @@ interface SeedIds {
 let seedIds: SeedIds | null = null;
 
 export async function seed(): Promise<SeedIds> {
+  // Pre-cleanup: eliminar datos sucios de runs anteriores que crashearon
+  const existingUser = await prisma.usuario.findUnique({
+    where: { email: TEST_USER.email },
+  });
+  if (existingUser) {
+    // Hay datos sucios — limpiar antes de seedear
+    const existingClientes = await prisma.cliente.findMany({
+      where: {
+        documento: {
+          in: [TEST_CLIENTE_CONTADO.documento, TEST_CLIENTE_CC.documento],
+        },
+      },
+    });
+    const clienteIds = existingClientes.map((c) => c.id);
+
+    await prisma.movimientoCaja.deleteMany({
+      where: { usuario: { email: TEST_USER.email } },
+    });
+    await prisma.cajaDiaria.deleteMany({
+      where: { abiertaPor: { email: TEST_USER.email } },
+    });
+    await prisma.movimientoCuenta.deleteMany({
+      where: { usuario: { email: TEST_USER.email } },
+    });
+    await prisma.detalleVenta.deleteMany({
+      where: { producto: { codigo: TEST_PRODUCT.codigo } },
+    });
+    await prisma.factura.deleteMany({
+      where: { venta: { creadaPor: { email: TEST_USER.email } } },
+    });
+    await prisma.remito.deleteMany({
+      where: { venta: { creadaPor: { email: TEST_USER.email } } },
+    });
+    await prisma.venta.deleteMany({
+      where: { creadaPor: { email: TEST_USER.email } },
+    });
+    await prisma.movimientoStock.deleteMany({
+      where: { usuario: { email: TEST_USER.email } },
+    });
+    if (clienteIds.length > 0) {
+      await prisma.cuenta.deleteMany({
+        where: {
+          OR: [
+            { clienteId: { in: clienteIds } },
+            { nombre: "Contado", titular: "PROPIA" },
+          ],
+        },
+      });
+      await prisma.cliente.deleteMany({
+        where: { id: { in: clienteIds } },
+      });
+    }
+    await prisma.producto.deleteMany({
+      where: { codigo: TEST_PRODUCT.codigo },
+    });
+    await prisma.categoria.deleteMany({
+      where: { nombre: "Frutas E2E" },
+    });
+    await prisma.unidadMedida.deleteMany({
+      where: { abreviatura: "KgE2E" },
+    });
+    await prisma.usuario.deleteMany({
+      where: { email: TEST_USER.email },
+    });
+  }
+
   const passwordHash = await bcrypt.hash(TEST_USER.password, 10);
 
   const usuario = await prisma.usuario.create({
@@ -110,10 +176,20 @@ export async function seed(): Promise<SeedIds> {
     },
   });
 
+  // Calcular próximo número de remito para evitar unique constraint
+  const lastRemito = await prisma.remito.findFirst({
+    orderBy: { id: "desc" },
+    select: { numero: true },
+  });
+  const currentMax = lastRemito
+    ? parseInt(lastRemito.numero.split("-")[1] || "0", 10)
+    : 0;
+  const proximoRemito = Math.max(currentMax + 1, 90000);
+
   const parametrosComprobante = await prisma.parametrosComprobante.upsert({
     where: { puntoVenta: 1 },
-    update: {},
-    create: { puntoVenta: 1 },
+    update: { proximoRemito },
+    create: { puntoVenta: 1, proximoRemito },
   });
 
   seedIds = {

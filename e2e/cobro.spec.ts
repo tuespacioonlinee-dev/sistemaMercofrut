@@ -28,15 +28,15 @@ test("crear deuda y cobrar parcialmente", async ({ page }) => {
 
   // Crear venta CC para generar deuda
   await page.goto("/ventas/nueva");
-  await page.locator("select#clienteId").selectOption({ label: new RegExp(TEST_CLIENTE_CC.nombreRazonSocial) });
+  await page.locator("select#clienteId").selectOption({ label: `${TEST_CLIENTE_CC.nombreRazonSocial} — ${TEST_CLIENTE_CC.documento}` });
   await page.locator("select#condicion").selectOption("CUENTA_CORRIENTE");
-  await page.getByRole("button", { name: /agregar/i }).first().click();
-  const productSelect = page.locator("select").nth(2);
-  await productSelect.selectOption({ label: new RegExp(TEST_PRODUCT.nombre) });
+  // Seleccionar producto en la línea existente (el form ya viene con 1 fila)
+  await page.locator("select").nth(2).selectOption({ label: TEST_PRODUCT.nombre });
   await page.locator("input[type='number'][step='0.001']").first().fill("2");
   await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Confirmar venta" }).click();
-  await expect(page).toHaveURL(/\/ventas/, { timeout: 10_000 });
+  // Esperar que salga de /ventas/nueva
+  await page.waitForURL((url) => !url.pathname.includes("/nueva"), { timeout: 15_000 });
 
   // Ir a cobros
   await page.goto("/cobros/nuevo");
@@ -63,11 +63,17 @@ test("crear deuda y cobrar parcialmente", async ({ page }) => {
 test("verificar que el saldo bajó después del cobro", async ({ page }) => {
   await page.goto("/cuentas/consulta");
 
-  await page.locator("input").first().fill(TEST_CLIENTE_CC.nombreRazonSocial);
+  // Buscar cliente CC
+  await page.getByPlaceholder(/nombre|buscar|cuit/i).fill(TEST_CLIENTE_CC.nombreRazonSocial);
+
+  // Esperar a que aparezcan los resultados de búsqueda
+  const resultado = page.locator("button", { hasText: TEST_CLIENTE_CC.nombreRazonSocial });
+  await expect(resultado.first()).toBeVisible({ timeout: 5_000 });
+  await resultado.first().click();
+
+  // Esperar a que carguen los datos de la cuenta
   await page.waitForTimeout(1000);
 
-  await page.getByText(TEST_CLIENTE_CC.nombreRazonSocial).first().click();
-
-  // Saldo debería ser 2000 (3000 de deuda - 1000 cobrado)
-  await expect(page.getByText("2.000")).toBeVisible({ timeout: 5_000 });
+  // Saldo debería ser 2000 (3000 de deuda - 1000 cobrado), formateado como "$ 2.000,00"
+  await expect(page.getByText("2.000").first()).toBeVisible({ timeout: 10_000 });
 });

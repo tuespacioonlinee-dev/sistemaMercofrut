@@ -26,6 +26,6 @@ test("login con credenciales inválidas muestra error", async ({ page }) => {
   await page.locator("#password").fill("wrongpass");
   await page.getByRole("button", { name: "Ingresar" }).click();
 
-  await expect(page.locator(".text-destructive")).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText("Email o contraseña incorrectos")).toBeVisible({ timeout: 5_000 });
   await expect(page).toHaveURL(/\/login/);
 });

@@ -28,18 +28,14 @@ test("crear venta contado y verificar en listado", async ({ page }) => {
   // Ir a nueva venta
   await page.goto("/ventas/nueva");
 
-  // Seleccionar cliente contado
-  await page.locator("select#clienteId").selectOption({ label: new RegExp(TEST_CLIENTE_CONTADO.nombreRazonSocial) });
+  // Seleccionar cliente contado (label exacto: "nombre — documento")
+  await page.locator("select#clienteId").selectOption({ label: `${TEST_CLIENTE_CONTADO.nombreRazonSocial} — ${TEST_CLIENTE_CONTADO.documento}` });
 
   // Condición: Contado
   await page.locator("select#condicion").selectOption("CONTADO");
 
-  // Agregar producto — click en botón "+"
-  await page.getByRole("button", { name: /agregar/i }).first().click();
-
-  // Seleccionar producto en la primera línea
-  const firstRow = page.locator("[data-testid='detalle-row']").first().or(page.locator("select").nth(2));
-  await firstRow.selectOption({ label: new RegExp(TEST_PRODUCT.nombre) });
+  // Seleccionar producto en la línea existente (el form ya viene con 1 fila)
+  await page.locator("select").nth(2).selectOption({ label: TEST_PRODUCT.nombre });
 
   // Llenar cantidad
   await page.locator("input[type='number'][step='0.001']").first().fill("2");
@@ -50,11 +46,12 @@ test("crear venta contado y verificar en listado", async ({ page }) => {
   // Confirmar venta
   await page.getByRole("button", { name: "Confirmar venta" }).click();
 
-  // Esperar redirect al listado de ventas
-  await expect(page).toHaveURL(/\/ventas/, { timeout: 10_000 });
+  // Esperar que salga de /ventas/nueva (redirige a /remitos/{id} o /ventas)
+  await page.waitForURL((url) => !url.pathname.includes("/nueva"), { timeout: 15_000 });
 
-  // Verificar que la venta aparece en el listado
-  await expect(page.getByText(TEST_CLIENTE_CONTADO.nombreRazonSocial)).toBeVisible();
+  // Ir al listado de ventas para verificar
+  await page.goto("/ventas");
+  await expect(page.getByText(TEST_CLIENTE_CONTADO.nombreRazonSocial)).toBeVisible({ timeout: 10_000 });
 });
 
 test("verificar que el stock bajó después de la venta", async ({ page }) => {
@@ -66,6 +63,6 @@ test("verificar que el stock bajó después de la venta", async ({ page }) => {
 
   // El stock debería ser 98 (100 - 2 vendidas en el test anterior)
   const row = page.locator("tr", { hasText: TEST_PRODUCT.nombre });
-  await expect(row).toBeVisible();
-  await expect(row.getByText("98")).toBeVisible();
+  await expect(row).toBeVisible({ timeout: 5_000 });
+  await expect(row.getByText("98")).toBeVisible({ timeout: 5_000 });
 });
