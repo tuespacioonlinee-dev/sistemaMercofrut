@@ -1,11 +1,14 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { ventaSchema } from "@/lib/validaciones/ventas"
 import { formatearNumeroRemito } from "@/lib/validaciones/remitos"
 import { registrarMovimientoCajaEnTx } from "@/server/actions/caja"
+import { requireRole, requireSession } from "@/lib/auth-guards"
+import { RolUsuario } from "@prisma/client"
+
+const ROLES_VENTAS = [RolUsuario.ADMIN, RolUsuario.VENDEDOR] as const
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Queries
@@ -18,6 +21,7 @@ import { registrarMovimientoCajaEnTx } from "@/server/actions/caja"
  * El último elemento devuelto trae `id` que se puede pasar como `cursor` para la siguiente página.
  */
 export async function obtenerVentas(opts?: { cursor?: string; take?: number; soloActivas?: boolean }) {
+  await requireSession()
   const take = Math.min(opts?.take ?? 200, 500)
   const where = opts?.soloActivas === false ? {} : { estado: { not: "ANULADA" as const } }
   return prisma.venta.findMany({
@@ -34,6 +38,7 @@ export async function obtenerVentas(opts?: { cursor?: string; take?: number; sol
 }
 
 export async function obtenerVentaPorId(id: string) {
+  await requireSession()
   return prisma.venta.findUnique({
     where: { id },
     include: {
@@ -57,8 +62,7 @@ export async function obtenerVentaPorId(id: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function crearVenta(data: unknown) {
-  const session = await auth()
-  if (!session) return { error: "No autorizado" }
+  const session = await requireRole(...ROLES_VENTAS)
 
   const parsed = ventaSchema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
@@ -166,7 +170,12 @@ export async function crearVenta(data: unknown) {
     ventaId = venta.id
 
     // ── 3. Descontar stock atómicamente (decrement evita lost-update) ─────
+    //      Si el producto controla vencimiento, además aplicamos FIFO sobre
+    //      los lotes: se va tomando del lote más viejo primero hasta cubrir
+    //      la cantidad. Si un lote queda en cero, se marca cerrado.
     for (const d of detallesConBase) {
+      const producto = productos.find((p) => p.id === d.productoId)!
+
       const updated = await tx.producto.update({
         where: { id: d.productoId },
         data:  { stockTotal: { decrement: d.cantidadBase } },
@@ -174,6 +183,43 @@ export async function crearVenta(data: unknown) {
       })
       const stockPosterior = Number(updated.stockTotal)
       const stockAnterior  = stockPosterior + d.cantidadBase
+
+      // FIFO sobre lotes (solo si controla vencimiento)
+      if (producto.controlaVencimiento) {
+        const lotes = await tx.loteProducto.findMany({
+          where: {
+            productoId:     d.productoId,
+            activo:         true,
+            cantidadActual: { gt: 0 },
+          },
+          orderBy: [
+            // Lotes con vencimiento más cercano primero;
+            // los lotes sin fecha de vencimiento van al final.
+            { fechaVencimiento: { sort: "asc", nulls: "last" } },
+            { fechaIngreso:     "asc" },
+          ],
+        })
+
+        let restante = d.cantidadBase
+        for (const lote of lotes) {
+          if (restante <= 0) break
+          const disponible = Number(lote.cantidadActual)
+          const aTomar = Math.min(disponible, restante)
+          await tx.loteProducto.update({
+            where: { id: lote.id },
+            data: {
+              cantidadActual: { decrement: aTomar },
+              // Si el lote se vacía, lo cerramos
+              ...(aTomar >= disponible ? { activo: false } : {}),
+            },
+          })
+          restante -= aTomar
+        }
+        // Nota: si restante > 0 al final, el stockTotal del producto y la
+        // suma de lotes están desincronizados (probablemente por ajustes
+        // manuales previos). El movimiento de stock se asienta igual; el
+        // descalce queda visible en los reportes de stock vs lotes.
+      }
 
       await tx.movimientoStock.create({
         data: {
@@ -284,8 +330,7 @@ export async function crearVenta(data: unknown) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function anularVenta(id: string, motivo: string) {
-  const session = await auth()
-  if (!session) return { error: "No autorizado" }
+  const session = await requireRole(...ROLES_VENTAS)
 
   const venta = await prisma.venta.findUnique({
     where:   { id },

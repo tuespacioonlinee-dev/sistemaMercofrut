@@ -1,12 +1,13 @@
 "use server"
 
 import { prisma } from "@/lib/prisma"
-import { auth } from "@/lib/auth"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
-import { TipoMovimientoStock } from "@prisma/client"
+import { RolUsuario, TipoMovimientoStock } from "@prisma/client"
+import { requireRole, requireSession } from "@/lib/auth-guards"
 
 export async function obtenerStockActual() {
+  await requireSession()
   return prisma.producto.findMany({
     where: { activo: true, deletedAt: null },
     select: {
@@ -29,6 +30,7 @@ export async function obtenerStockActual() {
 }
 
 export async function obtenerMovimientosProducto(productoId: string) {
+  await requireSession()
   return prisma.movimientoStock.findMany({
     where: { productoId },
     select: {
@@ -54,8 +56,7 @@ const ajusteSchema = z.object({
 })
 
 export async function ajustarStock(data: unknown) {
-  const session = await auth()
-  if (!session) return { error: "No autorizado" }
+  const session = await requireRole(RolUsuario.ADMIN, RolUsuario.COMPRADOR)
 
   const parsed = ajusteSchema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Datos inválidos." }
@@ -77,7 +78,7 @@ export async function ajustarStock(data: unknown) {
       data:  tipo === "AJUSTE_POSITIVO"
         ? { stockTotal: { increment: cantidad } }
         : { stockTotal: { decrement: cantidad } },
-      select: { stockTotal: true },
+      select: { stockTotal: true, controlaVencimiento: true },
     })
     const stockPosterior = Number(updated.stockTotal)
     const stockAnterior  = tipo === "AJUSTE_POSITIVO"
@@ -87,6 +88,36 @@ export async function ajustarStock(data: unknown) {
     // Defensa final ante race: si quedó negativo, abortar (rollback)
     if (stockPosterior < 0) {
       throw new Error("STOCK_NEGATIVO")
+    }
+
+    // Si es ajuste negativo sobre un producto que controla vencimiento,
+    // aplicar FIFO sobre los lotes (mismo criterio que la venta).
+    if (tipo === "AJUSTE_NEGATIVO" && updated.controlaVencimiento) {
+      const lotes = await tx.loteProducto.findMany({
+        where: {
+          productoId,
+          activo:         true,
+          cantidadActual: { gt: 0 },
+        },
+        orderBy: [
+          { fechaVencimiento: { sort: "asc", nulls: "last" } },
+          { fechaIngreso:     "asc" },
+        ],
+      })
+      let restante = cantidad
+      for (const lote of lotes) {
+        if (restante <= 0) break
+        const disponible = Number(lote.cantidadActual)
+        const aTomar = Math.min(disponible, restante)
+        await tx.loteProducto.update({
+          where: { id: lote.id },
+          data: {
+            cantidadActual: { decrement: aTomar },
+            ...(aTomar >= disponible ? { activo: false } : {}),
+          },
+        })
+        restante -= aTomar
+      }
     }
 
     await tx.movimientoStock.create({
