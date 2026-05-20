@@ -5,9 +5,9 @@ import { prisma } from "@/lib/prisma"
 import {
   esquemaCrearRemito,
   esquemaAnularRemito,
-  formatearNumeroRemito,
 } from "@/lib/validaciones/remitos"
 import { requireRole, requireSession } from "@/lib/auth-guards"
+import { generarNumeroComprobante, obtenerPuntoVentaDefault } from "@/server/lib/numeracion"
 import { RolUsuario } from "@prisma/client"
 
 const ROLES_REMITOS = [RolUsuario.ADMIN, RolUsuario.VENDEDOR] as const
@@ -90,29 +90,19 @@ export async function crearRemito(data: unknown) {
   if (!venta) return { error: "Venta no encontrada" }
   if (venta.estado !== "CONFIRMADA") return { error: "Solo se pueden generar remitos de ventas confirmadas" }
 
-  // Obtener/crear parámetros y numerar en transacción atómica.
-  // Importante: hacemos UPDATE { increment } ANTES y derivamos el número del valor retornado.
-  // Postgres serializa los UPDATEs concurrentes sobre la misma fila, evitando duplicados.
+  // Numeración atómica vía helper compartido (ver server/lib/numeracion.ts).
   const remito = await prisma.$transaction(async (tx) => {
-    let params = await tx.parametrosComprobante.findFirst()
-    if (!params) {
-      params = await tx.parametrosComprobante.create({
-        data: { puntoVenta: 1, proximoRemito: 1 },
-      })
-    }
-
-    const actualizado = await tx.parametrosComprobante.update({
-      where: { id: params.id },
-      data:  { proximoRemito: { increment: 1 } },
-      select: { proximoRemito: true, puntoVenta: true },
+    const puntoVenta = await obtenerPuntoVentaDefault(tx)
+    const { numero } = await generarNumeroComprobante(tx, {
+      tipo:  "REMITO",
+      letra: "X",
+      puntoVenta,
     })
-    const numeroAsignado = actualizado.proximoRemito - 1
-    const numero = formatearNumeroRemito(actualizado.puntoVenta, numeroAsignado)
 
     return tx.remito.create({
       data: {
         numero,
-        puntoVenta: actualizado.puntoVenta,
+        puntoVenta,
         ventaId,
         estado: "EMITIDO",
         ...(observaciones ? { motivoAnulacion: undefined } : {}),

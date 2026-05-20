@@ -655,6 +655,45 @@ model Factura {
 }
 
 // ============================================================================
+// SECUENCIA DE COMPROBANTES (numeración robusta y atómica)
+// ============================================================================
+//
+// Reemplaza los contadores hardcodeados en `ParametrosComprobante`
+// (proximoRemito / proximaFacturaA / proximaFacturaB / proximaFacturaC) por
+// una tabla genérica que soporta todos los tipos × letras × puntos de venta.
+//
+// La generación del próximo número va por src/server/lib/numeracion.ts y debe
+// ejecutarse dentro de la misma $transaction que crea el comprobante, así si
+// la transacción falla el contador no queda incrementado.
+
+enum TipoComprobante {
+  REMITO
+  FACTURA
+  NOTA_CREDITO
+  NOTA_DEBITO
+  RECIBO
+}
+
+enum LetraComprobante {
+  A
+  B
+  C
+  X    // sin letra fiscal (remitos, recibos internos)
+}
+
+model SecuenciaComprobante {
+  id           String           @id @default(cuid())
+  tipo         TipoComprobante
+  letra        LetraComprobante
+  puntoVenta   Int
+  ultimoNumero Int              @default(0)
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([tipo, letra, puntoVenta])
+  @@index([puntoVenta])
+}
+
+// ============================================================================
 // PARÁMETROS GENERALES
 // ============================================================================
 
