@@ -4,12 +4,15 @@ import { prisma } from "@/lib/prisma"
 import { esquemaParametros } from "@/lib/validaciones/parametros"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
+import { requireAdmin, requireSession } from "@/lib/auth-guards"
 
 export async function obtenerParametros() {
+  await requireSession()
   return prisma.parametrosNegocio.findFirst()
 }
 
 export async function guardarParametros(formData: unknown) {
+  await requireAdmin()
   const resultado = esquemaParametros.safeParse(formData)
 
   if (!resultado.success) {
@@ -51,6 +54,7 @@ export async function guardarParametros(formData: unknown) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function obtenerComprobantes() {
+  await requireSession()
   const comp = await prisma.parametrosComprobante.findFirst()
   if (!comp) return null
   return {
@@ -74,6 +78,7 @@ const esquemaNumeracion = z.object({
 export type DatosNumeracion = z.infer<typeof esquemaNumeracion>
 
 export async function actualizarNumeracion(data: unknown) {
+  await requireAdmin()
   const parsed = esquemaNumeracion.safeParse(data)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
 

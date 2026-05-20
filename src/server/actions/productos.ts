@@ -3,8 +3,13 @@
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { productoSchema } from "@/lib/validaciones/productos"
+import { requireRole } from "@/lib/auth-guards"
+import { RolUsuario } from "@prisma/client"
+
+const ROLES_CATALOGO = [RolUsuario.ADMIN, RolUsuario.COMPRADOR] as const
 
 export async function crearProducto(data: unknown) {
+  await requireRole(...ROLES_CATALOGO)
   const parsed = productoSchema.safeParse(data)
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message }
@@ -33,6 +38,7 @@ export async function crearProducto(data: unknown) {
 }
 
 export async function editarProducto(id: string, data: unknown) {
+  await requireRole(...ROLES_CATALOGO)
   const parsed = productoSchema.safeParse(data)
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message }
@@ -63,6 +69,7 @@ export async function editarProducto(id: string, data: unknown) {
 }
 
 export async function toggleProductoActivo(id: string, activo: boolean) {
+  await requireRole(...ROLES_CATALOGO)
   await prisma.producto.update({ where: { id }, data: { activo } })
   revalidatePath("/productos")
   return { ok: true }

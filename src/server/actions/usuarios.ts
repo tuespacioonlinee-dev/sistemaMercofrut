@@ -4,8 +4,10 @@ import { prisma } from "@/lib/prisma"
 import { crearUsuarioSchema, editarUsuarioSchema } from "@/lib/validaciones/usuarios"
 import { revalidatePath } from "next/cache"
 import bcrypt from "bcryptjs"
+import { requireAdmin } from "@/lib/auth-guards"
 
 export async function obtenerUsuarios() {
+  await requireAdmin()
   return prisma.usuario.findMany({
     where: { deletedAt: null },
     orderBy: { nombre: "asc" },
@@ -21,6 +23,7 @@ export async function obtenerUsuarios() {
 }
 
 export async function obtenerUsuarioPorId(id: string) {
+  await requireAdmin()
   return prisma.usuario.findFirst({
     where: { id, deletedAt: null },
     select: {
@@ -34,6 +37,7 @@ export async function obtenerUsuarioPorId(id: string) {
 }
 
 export async function crearUsuario(formData: unknown) {
+  await requireAdmin()
   const resultado = crearUsuarioSchema.safeParse(formData)
   if (!resultado.success) {
     return { error: resultado.error.issues[0]?.message ?? "Datos inválidos." }
@@ -55,6 +59,7 @@ export async function crearUsuario(formData: unknown) {
 }
 
 export async function editarUsuario(id: string, formData: unknown) {
+  await requireAdmin()
   const resultado = editarUsuarioSchema.safeParse(formData)
   if (!resultado.success) {
     return { error: resultado.error.issues[0]?.message ?? "Datos inválidos." }
@@ -86,6 +91,7 @@ export async function editarUsuario(id: string, formData: unknown) {
 }
 
 export async function toggleActivoUsuario(id: string, activo: boolean) {
+  await requireAdmin()
   await prisma.usuario.update({
     where: { id },
     data: { activo: !activo },

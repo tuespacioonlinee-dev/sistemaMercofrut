@@ -1,14 +1,16 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { compraSchema } from "@/lib/validaciones/compras"
 import { registrarMovimientoCajaEnTx } from "@/server/actions/caja"
+import { requireRole } from "@/lib/auth-guards"
+import { RolUsuario } from "@prisma/client"
+
+const ROLES_COMPRAS = [RolUsuario.ADMIN, RolUsuario.COMPRADOR] as const
 
 export async function crearCompra(data: unknown) {
-  const session = await auth()
-  if (!session) return { error: "No autorizado" }
+  const session = await requireRole(...ROLES_COMPRAS)
 
   const parsed = compraSchema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
@@ -205,8 +207,7 @@ export async function crearCompra(data: unknown) {
 }
 
 export async function anularCompra(id: string, motivo: string) {
-  const session = await auth()
-  if (!session) return { error: "No autorizado" }
+  const session = await requireRole(...ROLES_COMPRAS)
 
   const compra = await prisma.compra.findUnique({
     where: { id },

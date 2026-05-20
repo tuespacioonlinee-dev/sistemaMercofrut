@@ -3,8 +3,13 @@
 import { prisma } from "@/lib/prisma"
 import { esquemaCliente } from "@/lib/validaciones/clientes"
 import { revalidatePath } from "next/cache"
+import { requireRole, requireSession } from "@/lib/auth-guards"
+import { RolUsuario } from "@prisma/client"
+
+const ROLES_CLIENTES = [RolUsuario.ADMIN, RolUsuario.VENDEDOR] as const
 
 export async function obtenerClientes() {
+  await requireSession()
   return prisma.cliente.findMany({
     where: { deletedAt: null },
     orderBy: { nombreRazonSocial: "asc" },
@@ -12,12 +17,14 @@ export async function obtenerClientes() {
 }
 
 export async function obtenerClientePorId(id: string) {
+  await requireSession()
   return prisma.cliente.findFirst({
     where: { id, deletedAt: null },
   })
 }
 
 export async function crearCliente(formData: unknown) {
+  await requireRole(...ROLES_CLIENTES)
   const resultado = esquemaCliente.safeParse(formData)
 
   if (!resultado.success) {
@@ -46,6 +53,7 @@ export async function crearCliente(formData: unknown) {
         telefono: data.telefono || null,
         email: data.email || null,
         observaciones: data.observaciones || null,
+        listaPrecioId: data.listaPrecioId || null,
       },
     })
     revalidatePath("/clientes")
@@ -56,6 +64,7 @@ export async function crearCliente(formData: unknown) {
 }
 
 export async function editarCliente(id: string, formData: unknown) {
+  await requireRole(...ROLES_CLIENTES)
   const resultado = esquemaCliente.safeParse(formData)
 
   if (!resultado.success) {
@@ -85,6 +94,7 @@ export async function editarCliente(id: string, formData: unknown) {
         telefono: data.telefono || null,
         email: data.email || null,
         observaciones: data.observaciones || null,
+        listaPrecioId: data.listaPrecioId || null,
       },
     })
     revalidatePath("/clientes")
@@ -96,6 +106,7 @@ export async function editarCliente(id: string, formData: unknown) {
 }
 
 export async function eliminarCliente(id: string) {
+  await requireRole(RolUsuario.ADMIN)
   await prisma.cliente.update({
     where: { id },
     data: { deletedAt: new Date(), activo: false },

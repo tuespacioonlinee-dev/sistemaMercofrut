@@ -3,10 +3,12 @@
 import { prisma } from "@/lib/prisma"
 import { esquemaCuenta } from "@/lib/validaciones/cuentas"
 import { revalidatePath } from "next/cache"
-import { auth } from "@/lib/auth"
 import { registrarMovimientoCajaEnTx } from "@/server/actions/caja"
+import { requireRole, requireAdmin, requireSession } from "@/lib/auth-guards"
+import { RolUsuario } from "@prisma/client"
 
 export async function obtenerCuentas() {
+  await requireSession()
   return prisma.cuenta.findMany({
     where: { deletedAt: null },
     include: {
@@ -18,6 +20,7 @@ export async function obtenerCuentas() {
 }
 
 export async function obtenerCuentaPorId(id: string) {
+  await requireSession()
   return prisma.cuenta.findFirst({
     where: { id, deletedAt: null },
     include: {
@@ -32,6 +35,7 @@ export async function obtenerCuentaPorId(id: string) {
 }
 
 export async function obtenerCuentasProveedores() {
+  await requireSession()
   return prisma.cuenta.findMany({
     where: { tipo: "CORRIENTE", titular: "PROVEEDOR", deletedAt: null, activa: true },
     include: {
@@ -46,6 +50,7 @@ export async function obtenerCuentasProveedores() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function obtenerCuentasCorrientes() {
+  await requireSession()
   return prisma.cuenta.findMany({
     where: { tipo: "CORRIENTE", titular: "CLIENTE", deletedAt: null, activa: true },
     include: {
@@ -61,8 +66,7 @@ export async function registrarCobro(
   concepto: string,
   clientRequestId?: string
 ) {
-  const session = await auth()
-  if (!session) return { error: "No autorizado" }
+  const session = await requireRole(RolUsuario.ADMIN, RolUsuario.VENDEDOR)
   if (monto <= 0) return { error: "El monto debe ser mayor a 0" }
   if (!concepto.trim()) return { error: "Ingresá un concepto" }
 
@@ -127,15 +131,22 @@ export async function registrarPago(
   concepto: string,
   clientRequestId?: string
 ) {
-  const session = await auth()
-  if (!session) return { error: "No autorizado" }
+  const session = await requireRole(RolUsuario.ADMIN, RolUsuario.COMPRADOR)
   if (monto <= 0) return { error: "El monto debe ser mayor a 0" }
   if (!concepto.trim()) return { error: "Ingresá un concepto" }
 
   const cuenta = await prisma.cuenta.findUnique({ where: { id: cuentaId, deletedAt: null } })
   if (!cuenta) return { error: "Cuenta no encontrada" }
 
+  // Validación rápida: no permitir pagos que excedan el saldo a pagar al proveedor.
+  // Espejo del patrón de registrarCobro: hay otra verificación dentro de la
+  // transacción para cubrir race conditions.
+  if (monto > Number(cuenta.saldo)) {
+    return { error: `El pago ($${monto.toLocaleString("es-AR")}) no puede superar el saldo adeudado al proveedor ($${Number(cuenta.saldo).toLocaleString("es-AR")}).` }
+  }
+
   let duplicada = false
+  let excedido  = false
 
   await prisma.$transaction(async (tx) => {
     if (clientRequestId) {
@@ -144,6 +155,16 @@ export async function registrarPago(
         select: { id: true },
       })
       if (existente) { duplicada = true; return }
+    }
+
+    // Relectura del saldo dentro de la transacción para detectar race conditions.
+    const cuentaActual = await tx.cuenta.findUniqueOrThrow({
+      where: { id: cuentaId },
+      select: { saldo: true },
+    })
+    if (monto > Number(cuentaActual.saldo)) {
+      excedido = true
+      return // Aborta la tx (los efectos no se aplican)
     }
 
     const cuentaActualizada = await tx.cuenta.update({
@@ -179,6 +200,10 @@ export async function registrarPago(
     })
   })
 
+  if (excedido) {
+    return { error: "El pago no puede superar el saldo adeudado al proveedor. Refrescá la pantalla." }
+  }
+
   revalidatePath("/cuentas")
   revalidatePath(`/cuentas/${cuentaId}`)
   revalidatePath("/caja")
@@ -186,6 +211,7 @@ export async function registrarPago(
 }
 
 export async function crearCuenta(formData: unknown) {
+  await requireAdmin()
   const resultado = esquemaCuenta.safeParse(formData)
 
   if (!resultado.success) {

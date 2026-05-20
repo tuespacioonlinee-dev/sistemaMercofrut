@@ -1,7 +1,6 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import {
   esquemaCrearFactura,
@@ -10,8 +9,13 @@ import {
   determinarTipoFactura,
   calcularIva,
 } from "@/lib/validaciones/facturacion"
+import { requireRole, requireSession } from "@/lib/auth-guards"
+import { RolUsuario } from "@prisma/client"
+
+const ROLES_FACTURACION = [RolUsuario.ADMIN, RolUsuario.VENDEDOR] as const
 
 export async function obtenerFacturas(opts?: { cursor?: string; take?: number }) {
+  await requireSession()
   const take = Math.min(opts?.take ?? 300, 500)
   return prisma.factura.findMany({
     include: {
@@ -32,6 +36,7 @@ export async function obtenerFacturas(opts?: { cursor?: string; take?: number })
 }
 
 export async function obtenerFacturaPorId(id: string) {
+  await requireSession()
   return prisma.factura.findUnique({
     where: { id },
     include: {
@@ -54,6 +59,7 @@ export async function obtenerFacturaPorId(id: string) {
 
 /** Ventas CONFIRMADA sin factura emitida vigente */
 export async function obtenerVentasParaFacturar() {
+  await requireSession()
   const ventas = await prisma.venta.findMany({
     where: { estado: "CONFIRMADA" },
     include: {
@@ -75,8 +81,7 @@ export async function obtenerVentasParaFacturar() {
 }
 
 export async function crearFactura(data: unknown) {
-  const session = await auth()
-  if (!session) return { error: "No autorizado" }
+  await requireRole(...ROLES_FACTURACION)
 
   const parsed = esquemaCrearFactura.safeParse(data)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
@@ -157,8 +162,7 @@ export async function crearFactura(data: unknown) {
 }
 
 export async function anularFactura(facturaId: string, data: unknown) {
-  const session = await auth()
-  if (!session) return { error: "No autorizado" }
+  await requireRole(...ROLES_FACTURACION)
 
   const parsed = esquemaAnularFactura.safeParse(data)
   if (!parsed.success) return { error: parsed.error.issues[0].message }

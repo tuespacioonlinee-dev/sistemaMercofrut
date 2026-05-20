@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma"
 import { differenceInDays, isPast, startOfMonth, subMonths } from "date-fns"
+import { requireSession } from "@/lib/auth-guards"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos exportados para reportes de stock
@@ -44,6 +45,7 @@ export type CajaParaReporte = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function obtenerCajasParaSelector(): Promise<CajaParaReporte[]> {
+  await requireSession()
   const cajas = await prisma.cajaDiaria.findMany({
     orderBy: { numero: "desc" },
     take: 90,
@@ -67,6 +69,7 @@ export async function obtenerReporteStockDiario(cajaId?: string): Promise<{
   caja: CajaParaReporte
   filas: FilaStockDiario[]
 } | null> {
+  await requireSession()
   // 1. Buscar caja
   const cajaRaw = cajaId
     ? await prisma.cajaDiaria.findUnique({
@@ -197,6 +200,7 @@ export async function obtenerReporteStockResumido(cajaId?: string): Promise<{
   caja:  CajaParaReporte
   filas: FilaStockResumido[]
 } | null> {
+  await requireSession()
   const diario = await obtenerReporteStockDiario(cajaId)
   if (!diario) return null
 
@@ -215,6 +219,7 @@ export async function obtenerReporteStockResumido(cajaId?: string): Promise<{
 }
 
 export async function obtenerResumenStock() {
+  await requireSession()
   const productos = await prisma.producto.findMany({
     where: { activo: true, deletedAt: null },
     select: {
@@ -262,6 +267,7 @@ export async function obtenerResumenStock() {
 }
 
 export async function obtenerComprasPorMes(meses = 6) {
+  await requireSession()
   const desde = startOfMonth(subMonths(new Date(), meses - 1))
 
   const compras = await prisma.compra.findMany({
@@ -317,6 +323,7 @@ export async function obtenerComprasPorMes(meses = 6) {
 }
 
 export async function obtenerReporteCaja(cajaId?: string) {
+  await requireSession()
   const caja = cajaId
     ? await prisma.cajaDiaria.findUnique({ where: { id: cajaId } })
     : await prisma.cajaDiaria.findFirst({ where: { estado: "ABIERTA" }, orderBy: { fechaApertura: "desc" } })
@@ -344,6 +351,7 @@ export async function obtenerReporteCaja(cajaId?: string) {
 }
 
 export async function obtenerCajasList() {
+  await requireSession()
   return prisma.cajaDiaria.findMany({
     orderBy: { fechaApertura: "desc" },
     take: 60,
@@ -397,6 +405,7 @@ export type FiltroMovCC =
 
 // Búsqueda de personas (debounce en el cliente)
 export async function buscarPersonas(q: string): Promise<PersonaResumen[]> {
+  await requireSession()
   const term = q.trim().toLowerCase()
   if (term.length < 1) return []
 
@@ -483,6 +492,7 @@ export async function obtenerMovimientosCtaCte(
   cuentaId: string,
   filtro: FiltroMovCC,
 ): Promise<FilaMovimientoCuenta[]> {
+  await requireSession()
   const movs = await prisma.movimientoCuenta.findMany({
     where: { cuentaId },
     orderBy: { fecha: "asc" },
@@ -576,6 +586,7 @@ export async function obtenerMovimientosCtaCte(
 }
 
 export async function obtenerMovimientosCuenta(cuentaId: string) {
+  await requireSession()
   return prisma.movimientoCuenta.findMany({
     where: { cuentaId },
     include: { usuario: { select: { nombre: true } } },
@@ -585,6 +596,7 @@ export async function obtenerMovimientosCuenta(cuentaId: string) {
 }
 
 export async function obtenerCuentasConSaldo() {
+  await requireSession()
   return prisma.cuenta.findMany({
     where: { deletedAt: null, activa: true },
     include: {
@@ -611,6 +623,7 @@ export type FilaListadoPersona = {
 }
 
 export async function obtenerListadoClientes(soloConSaldo = false): Promise<FilaListadoPersona[]> {
+  await requireSession()
   const clientes = await prisma.cliente.findMany({
     where: { deletedAt: null, activo: true },
     select: {
@@ -644,6 +657,7 @@ export async function obtenerListadoClientes(soloConSaldo = false): Promise<Fila
 }
 
 export async function obtenerListadoProveedores(soloConSaldo = false): Promise<FilaListadoPersona[]> {
+  await requireSession()
   const proveedores = await prisma.proveedor.findMany({
     where: { deletedAt: null, activo: true },
     select: {
@@ -677,6 +691,7 @@ export async function obtenerListadoProveedores(soloConSaldo = false): Promise<F
 }
 
 export async function obtenerReporteClientes() {
+  await requireSession()
   return prisma.cliente.findMany({
     where: { deletedAt: null },
     include: {
@@ -687,6 +702,7 @@ export async function obtenerReporteClientes() {
 }
 
 export async function obtenerReporteProveedores() {
+  await requireSession()
   return prisma.proveedor.findMany({
     where: { deletedAt: null },
     include: {
@@ -697,6 +713,7 @@ export async function obtenerReporteProveedores() {
 }
 
 export async function obtenerLotesCriticos() {
+  await requireSession()
   const lotes = await prisma.loteProducto.findMany({
     where: { activo: true },
     select: {

@@ -3,6 +3,8 @@
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
+import { requireRole } from "@/lib/auth-guards"
+import { RolUsuario } from "@prisma/client"
 
 const itemSchema = z.object({
   id: z.string().min(1),
@@ -13,6 +15,7 @@ const itemSchema = z.object({
 const actualizarPreciosSchema = z.array(itemSchema).min(1)
 
 export async function actualizarPrecios(data: unknown) {
+  await requireRole(RolUsuario.ADMIN, RolUsuario.COMPRADOR)
   const parsed = actualizarPreciosSchema.safeParse(data)
   if (!parsed.success) return { error: "Datos inválidos." }
 

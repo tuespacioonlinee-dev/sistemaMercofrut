@@ -3,8 +3,13 @@
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { proveedorSchema } from "@/lib/validaciones/proveedores"
+import { requireRole } from "@/lib/auth-guards"
+import { RolUsuario } from "@prisma/client"
+
+const ROLES_CATALOGO = [RolUsuario.ADMIN, RolUsuario.COMPRADOR] as const
 
 export async function crearProveedor(data: unknown) {
+  await requireRole(...ROLES_CATALOGO)
   const parsed = proveedorSchema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
 
@@ -28,6 +33,7 @@ export async function crearProveedor(data: unknown) {
 }
 
 export async function editarProveedor(id: string, data: unknown) {
+  await requireRole(...ROLES_CATALOGO)
   const parsed = proveedorSchema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
 
@@ -53,6 +59,7 @@ export async function editarProveedor(id: string, data: unknown) {
 }
 
 export async function toggleProveedorActivo(id: string, activo: boolean) {
+  await requireRole(...ROLES_CATALOGO)
   await prisma.proveedor.update({ where: { id }, data: { activo } })
   revalidatePath("/proveedores")
   return { ok: true }

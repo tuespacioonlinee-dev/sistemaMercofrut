@@ -1,15 +1,19 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import {
   esquemaCrearRemito,
   esquemaAnularRemito,
   formatearNumeroRemito,
 } from "@/lib/validaciones/remitos"
+import { requireRole, requireSession } from "@/lib/auth-guards"
+import { RolUsuario } from "@prisma/client"
+
+const ROLES_REMITOS = [RolUsuario.ADMIN, RolUsuario.VENDEDOR] as const
 
 export async function obtenerRemitos(opts?: { cursor?: string; take?: number }) {
+  await requireSession()
   const take = Math.min(opts?.take ?? 300, 500)
   return prisma.remito.findMany({
     include: {
@@ -30,6 +34,7 @@ export async function obtenerRemitos(opts?: { cursor?: string; take?: number }) 
 }
 
 export async function obtenerRemitoPorId(id: string) {
+  await requireSession()
   return prisma.remito.findUnique({
     where: { id },
     include: {
@@ -51,6 +56,7 @@ export async function obtenerRemitoPorId(id: string) {
 
 /** Ventas CONFIRMADA que pueden tener un nuevo remito */
 export async function obtenerVentasParaRemito() {
+  await requireSession()
   return prisma.venta.findMany({
     where: { estado: "CONFIRMADA" },
     include: {
@@ -69,8 +75,7 @@ export async function obtenerVentasParaRemito() {
 }
 
 export async function crearRemito(data: unknown) {
-  const session = await auth()
-  if (!session) return { error: "No autorizado" }
+  await requireRole(...ROLES_REMITOS)
 
   const parsed = esquemaCrearRemito.safeParse(data)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
@@ -121,8 +126,7 @@ export async function crearRemito(data: unknown) {
 }
 
 export async function anularRemito(remitoId: string, data: unknown) {
-  const session = await auth()
-  if (!session) return { error: "No autorizado" }
+  await requireRole(...ROLES_REMITOS)
 
   const parsed = esquemaAnularRemito.safeParse(data)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
