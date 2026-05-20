@@ -8,6 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx prisma/seed.ts",
+    "onboard:client": "dotenv -e .env.cliente -- sh -c 'prisma migrate deploy && npm run seed'",
+    "test": "vitest",
+    "test:run": "vitest run",
     "postinstall": "prisma generate"
   },
   "prisma": {
@@ -50,8 +53,12 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "tailwindcss": "^4",
+    "dotenv-cli": "^7.4.4",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^2.1.9",
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite-tsconfig-paths": "^5.1.4"
   }
 }
