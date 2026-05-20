@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { ventaSchema } from "@/lib/validaciones/ventas"
-import { formatearNumeroRemito } from "@/lib/validaciones/remitos"
 import { registrarMovimientoCajaEnTx } from "@/server/actions/caja"
 import { requireRole, requireSession } from "@/lib/auth-guards"
+import { generarNumeroComprobante, obtenerPuntoVentaDefault } from "@/server/lib/numeracion"
 import { RolUsuario } from "@prisma/client"
 
 const ROLES_VENTAS = [RolUsuario.ADMIN, RolUsuario.VENDEDOR] as const
@@ -258,25 +258,18 @@ export async function crearVenta(data: unknown) {
       },
     })
 
-    // ── 5. Crear remito correlativo (increment ANTES de derivar número) ───
-    let comp = await tx.parametrosComprobante.findFirst()
-    if (!comp) {
-      comp = await tx.parametrosComprobante.create({ data: { puntoVenta: 1 } })
-    }
-
-    // El UPDATE atómico serializa las concurrentes; usamos el valor post-increment.
-    const compActualizado = await tx.parametrosComprobante.update({
-      where: { id: comp.id },
-      data:  { proximoRemito: { increment: 1 } },
-      select: { proximoRemito: true, puntoVenta: true },
+    // ── 5. Crear remito correlativo (helper atómico, ver server/lib/numeracion.ts) ───
+    const puntoVenta = await obtenerPuntoVentaDefault(tx)
+    const { numero } = await generarNumeroComprobante(tx, {
+      tipo:  "REMITO",
+      letra: "X",
+      puntoVenta,
     })
-    const numeroAsignado = compActualizado.proximoRemito - 1
-    const numero = formatearNumeroRemito(compActualizado.puntoVenta, numeroAsignado)
 
     const remito = await tx.remito.create({
       data: {
         numero,
-        puntoVenta: compActualizado.puntoVenta,
+        puntoVenta,
         ventaId:    venta.id,
         estado:     "EMITIDO",
       },
