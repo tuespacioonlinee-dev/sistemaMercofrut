@@ -37,6 +37,9 @@ yarn-error.log*
 # claude code settings (can contain tokens)
 .claude/
 
+# documentos comerciales (presupuestos a clientes, etc) — no son del sistema
+/presupuestos/
+
 # vercel
 .vercel
 
