@@ -128,6 +128,18 @@ export async function cerrarCaja(cajaId: string, formData: unknown) {
 
   const diferencia = parsed.data.saldoArqueo - saldoFinal
 
+  // Si el arqueo no coincide con el saldo esperado, las observaciones
+  // pasan a ser obligatorias — el operador debe explicar el motivo.
+  const haDiferencia = Math.abs(diferencia) > 0.005
+  const obsTrim = parsed.data.observaciones?.trim() ?? ""
+  if (haDiferencia && obsTrim.length === 0) {
+    const signo = diferencia > 0 ? "+" : "−"
+    const abs = Math.abs(diferencia).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    return {
+      error: `Tenés una diferencia de ${signo}$${abs} entre el arqueo y el saldo esperado. Indicá el motivo en "Observaciones".`,
+    }
+  }
+
   await prisma.cajaDiaria.update({
     where: { id: cajaId },
     data: {

@@ -73,7 +73,14 @@ export async function registrarCobro(
   const cuenta = await prisma.cuenta.findUnique({ where: { id: cuentaId, deletedAt: null } })
   if (!cuenta) return { error: "Cuenta no encontrada" }
 
+  // Validación rápida: no permitir cobros que excedan el saldo deudor.
+  // Hay otra verificación dentro de la transacción para cubrir race conditions.
+  if (monto > Number(cuenta.saldo)) {
+    return { error: `El cobro ($${monto.toLocaleString("es-AR")}) no puede superar el saldo deudor del cliente ($${Number(cuenta.saldo).toLocaleString("es-AR")}).` }
+  }
+
   let duplicada = false
+  let excedido  = false
 
   await prisma.$transaction(async (tx) => {
     // Idempotency: si ya existe un movimiento con este clientRequestId, no duplicar
@@ -83,6 +90,16 @@ export async function registrarCobro(
         select: { id: true },
       })
       if (existente) { duplicada = true; return }
+    }
+
+    // Relectura del saldo dentro de la transacción para detectar race conditions.
+    const cuentaActual = await tx.cuenta.findUniqueOrThrow({
+      where: { id: cuentaId },
+      select: { saldo: true },
+    })
+    if (monto > Number(cuentaActual.saldo)) {
+      excedido = true
+      return // Aborta la tx (los efectos no se aplican)
     }
 
     // Decrement atómico sobre el saldo (evita lost-update)
@@ -118,6 +135,12 @@ export async function registrarCobro(
       origenId: cuentaId,
     })
   })
+
+  if (excedido) {
+    // Salió de la transacción sin aplicar cambios — el saldo se movió entre la
+    // validación inicial y la transacción (race condition).
+    return { error: "El cobro no puede superar el saldo deudor del cliente. Refrescá la pantalla." }
+  }
 
   revalidatePath("/cuentas")
   revalidatePath(`/cuentas/${cuentaId}`)
