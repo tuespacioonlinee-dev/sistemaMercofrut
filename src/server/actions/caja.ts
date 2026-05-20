@@ -1,7 +1,6 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import {
   esquemaAperturaCaja,
@@ -11,13 +10,19 @@ import {
   type TipoMovCaja,
   type CategoriaMovCaja,
 } from "@/lib/validaciones/caja"
-import type { Prisma } from "@prisma/client"
+import { Prisma, RolUsuario } from "@prisma/client"
+import { requireRole, requireSession } from "@/lib/auth-guards"
+
+// Caja: la operan los tres roles activos (vendedor cobra, comprador paga,
+// admin todo). CONSULTA queda afuera.
+const ROLES_CAJA = [RolUsuario.ADMIN, RolUsuario.VENDEDOR, RolUsuario.COMPRADOR] as const
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Queries
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function obtenerCajaAbierta() {
+  await requireSession()
   return prisma.cajaDiaria.findFirst({
     where: { estado: "ABIERTA" },
     include: {
@@ -33,6 +38,7 @@ export async function obtenerCajaAbierta() {
 }
 
 export async function obtenerHistorialCajas(opts?: { cursor?: string; take?: number }) {
+  await requireSession()
   const take = Math.min(opts?.take ?? 90, 200)
   return prisma.cajaDiaria.findMany({
     where: { estado: "CERRADA" },
@@ -47,6 +53,7 @@ export async function obtenerHistorialCajas(opts?: { cursor?: string; take?: num
 }
 
 export async function obtenerCajaPorId(id: string) {
+  await requireSession()
   return prisma.cajaDiaria.findUnique({
     where: { id },
     include: {
@@ -66,8 +73,7 @@ export async function obtenerCajaPorId(id: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function abrirCaja(formData: unknown) {
-  const session = await auth()
-  if (!session) return { error: "No autorizado" }
+  const session = await requireRole(...ROLES_CAJA)
 
   const parsed = esquemaAperturaCaja.safeParse(formData)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
@@ -92,8 +98,7 @@ export async function abrirCaja(formData: unknown) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function cerrarCaja(cajaId: string, formData: unknown) {
-  const session = await auth()
-  if (!session) return { error: "No autorizado" }
+  const session = await requireRole(...ROLES_CAJA)
 
   const parsed = esquemaCierreCaja.safeParse(formData)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
@@ -150,8 +155,7 @@ export async function cerrarCaja(cajaId: string, formData: unknown) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function registrarMovimiento(cajaId: string, formData: unknown) {
-  const session = await auth()
-  if (!session) return { error: "No autorizado" }
+  const session = await requireRole(...ROLES_CAJA)
 
   const parsed = esquemaMovimientoCaja.safeParse(formData)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
