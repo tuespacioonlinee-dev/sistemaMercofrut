@@ -26,6 +26,8 @@ interface Props {
   valoresIniciales?: Partial<DatosCliente>
   onSubmit: (data: DatosCliente) => Promise<{ ok?: boolean; error?: string }>
   modoEdicion?: boolean
+  /** Listas de precios disponibles (activas). Si está vacío, el campo no se muestra. */
+  listasPrecios?: { id: string; nombre: string }[]
 }
 
 // Estilo compartido para los <select> nativos, igual al Input de shadcn
@@ -35,7 +37,7 @@ const selectClasses = cn(
   "disabled:cursor-not-allowed disabled:opacity-50"
 )
 
-export function FormularioCliente({ valoresIniciales, onSubmit, modoEdicion = false }: Props) {
+export function FormularioCliente({ valoresIniciales, onSubmit, modoEdicion = false, listasPrecios = [] }: Props) {
   const router = useRouter()
   const [guardando, setGuardando] = useState(false)
 
@@ -184,6 +186,25 @@ export function FormularioCliente({ valoresIniciales, onSubmit, modoEdicion = fa
           </div>
         </div>
       </div>
+
+      {listasPrecios.length > 0 && (
+        <>
+          <Separator />
+
+          <div className="space-y-1">
+            <Label htmlFor="listaPrecioId">Lista de precios</Label>
+            <select id="listaPrecioId" className={selectClasses} {...register("listaPrecioId")}>
+              <option value="">— Predeterminada del sistema —</option>
+              {listasPrecios.map((l) => (
+                <option key={l.id} value={l.id}>{l.nombre}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Si no asignás una lista, se usa la lista predeterminada (o el precio base del producto).
+            </p>
+          </div>
+        </>
+      )}
 
       <Separator />
 

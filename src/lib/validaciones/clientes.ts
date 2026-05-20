@@ -26,6 +26,7 @@ export const esquemaCliente = z.object({
       { message: "Email inválido" }
     ),
   observaciones: z.string().optional(),
+  listaPrecioId: z.string().optional().nullable(),
 })
 
 export type DatosCliente = z.infer<typeof esquemaCliente>

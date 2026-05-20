@@ -95,6 +95,7 @@ model Producto {
   detallesVenta        DetalleVenta[]
   detallesCompra       DetalleCompra[]
   lotes                LoteProducto[]
+  precios              PrecioProducto[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -103,6 +104,45 @@ model Producto {
   @@index([codigo])
   @@index([nombre])
   @@index([categoriaId])
+}
+
+// ============================================================================
+// LISTAS DE PRECIOS
+// ============================================================================
+// El `precioVenta` del Producto sigue siendo el "precio base" (compatibilidad).
+// Las listas permiten precios diferenciados por cliente (mayorista, minorista,
+// especial). Si un cliente no tiene lista asignada o el producto no tiene
+// precio en la lista, se usa el `precioVenta` del Producto como fallback.
+
+model ListaPrecio {
+  id          String   @id @default(cuid())
+  nombre      String   @unique
+  descripcion String?
+  activa      Boolean  @default(true)
+  esDefault   Boolean  @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  precios  PrecioProducto[]
+  clientes Cliente[]
+}
+
+model PrecioProducto {
+  id            String  @id @default(cuid())
+  productoId    String
+  listaPrecioId String
+  precio        Decimal @db.Decimal(12, 2)
+
+  producto    Producto    @relation(fields: [productoId],    references: [id], onDelete: Cascade)
+  listaPrecio ListaPrecio @relation(fields: [listaPrecioId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productoId, listaPrecioId])
+  @@index([listaPrecioId])
 }
 
 model ProductoUnidad {
@@ -210,16 +250,19 @@ model Cliente {
   maxCredito        Decimal?      @db.Decimal(14, 2)
   saldoInicial      Decimal       @db.Decimal(14, 2) @default(0)
   activo            Boolean       @default(true)
+  listaPrecioId     String?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  cuentas Cuenta[]
-  ventas  Venta[]
+  cuentas     Cuenta[]
+  ventas      Venta[]
+  listaPrecio ListaPrecio? @relation(fields: [listaPrecioId], references: [id])
 
   @@index([nombreRazonSocial])
   @@index([documento])
+  @@index([listaPrecioId])
 }
 
 model Proveedor {

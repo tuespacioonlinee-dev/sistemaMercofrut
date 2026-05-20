@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 import { ChevronLeft } from "lucide-react"
 import { FormularioCliente } from "../../FormularioCliente"
 import { obtenerClientePorId, editarCliente } from "@/server/actions/clientes"
+import { obtenerListasPrecios } from "@/server/actions/listas-precios"
 import { DatosCliente } from "@/lib/validaciones/clientes"
 
 interface Props {
@@ -11,9 +12,16 @@ interface Props {
 
 export default async function EditarClientePage({ params }: Props) {
   const { id } = await params
-  const cliente = await obtenerClientePorId(id)
+  const [cliente, listasRaw] = await Promise.all([
+    obtenerClientePorId(id),
+    obtenerListasPrecios(),
+  ])
 
   if (!cliente) notFound()
+
+  const listas = listasRaw
+    .filter((l) => l.activa)
+    .map((l) => ({ id: l.id, nombre: l.nombre }))
 
   async function accionEditar(data: DatosCliente) {
     "use server"
@@ -42,6 +50,7 @@ export default async function EditarClientePage({ params }: Props) {
       <FormularioCliente
         modoEdicion
         onSubmit={accionEditar}
+        listasPrecios={listas}
         valoresIniciales={{
           nombreRazonSocial: cliente.nombreRazonSocial,
           tipoDocumento: cliente.tipoDocumento,
@@ -52,6 +61,7 @@ export default async function EditarClientePage({ params }: Props) {
           telefono: cliente.telefono ?? undefined,
           email: cliente.email ?? undefined,
           observaciones: cliente.observaciones ?? undefined,
+          listaPrecioId: cliente.listaPrecioId ?? null,
         }}
       />
     </div>

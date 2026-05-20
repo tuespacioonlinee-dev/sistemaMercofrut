@@ -2,9 +2,14 @@ import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
 import { FormularioCliente } from "../FormularioCliente"
 import { crearCliente } from "@/server/actions/clientes"
+import { obtenerListasPrecios } from "@/server/actions/listas-precios"
 import { DatosCliente } from "@/lib/validaciones/clientes"
 
-export default function NuevoClientePage() {
+export default async function NuevoClientePage() {
+  const listas = (await obtenerListasPrecios())
+    .filter((l) => l.activa)
+    .map((l) => ({ id: l.id, nombre: l.nombre }))
+
   async function accionCrear(data: DatosCliente) {
     "use server"
     return crearCliente(data)
@@ -29,7 +34,7 @@ export default function NuevoClientePage() {
         </p>
       </div>
 
-      <FormularioCliente onSubmit={accionCrear} />
+      <FormularioCliente onSubmit={accionCrear} listasPrecios={listas} />
     </div>
   )
 }
