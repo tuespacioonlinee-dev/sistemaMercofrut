@@ -10,35 +10,35 @@ import {
 import { OFFLINE_MODE_ENABLED } from "@/lib/feature-flags"
 
 export function useSnapshotClientes(): ClienteSnap[] {
-  return useLiveQuery<ClienteSnap[]>(
-    async () => {
+  const r = useLiveQuery(
+    async (): Promise<ClienteSnap[]> => {
       if (!OFFLINE_MODE_ENABLED) return []
       return getOfflineDB().clientes.orderBy("nombreRazonSocial").toArray()
     },
     [],
-    [],
-  ) ?? []
+  )
+  return r ?? []
 }
 
 export function useSnapshotProductos(): ProductoSnap[] {
-  return useLiveQuery<ProductoSnap[]>(
-    async () => {
+  const r = useLiveQuery(
+    async (): Promise<ProductoSnap[]> => {
       if (!OFFLINE_MODE_ENABLED) return []
       return getOfflineDB().productos.orderBy("nombre").toArray()
     },
     [],
-    [],
-  ) ?? []
+  )
+  return r ?? []
 }
 
 export function useSnapshotParametros(): ParametrosSnap | null {
-  return useLiveQuery<ParametrosSnap | null>(
-    async () => {
+  const r = useLiveQuery(
+    async (): Promise<ParametrosSnap | null> => {
       if (!OFFLINE_MODE_ENABLED) return null
       const p = await getOfflineDB().parametros.get("parametros")
       return p ?? null
     },
     [],
-    null,
-  ) ?? null
+  )
+  return r ?? null
 }

@@ -32,9 +32,9 @@ export function PantallaSync() {
 
 function PantallaSyncInner() {
   const { online } = useConnectivity()
-  const pendientes = useVentasOffline("PENDIENTE_SYNC") ?? []
-  const errores = useVentasOffline("ERROR_SYNC") ?? []
-  const sincronizadas = useVentasOffline("SINCRONIZADA") ?? []
+  const pendientes = useVentasOffline("PENDIENTE_SYNC")
+  const errores = useVentasOffline("ERROR_SYNC")
+  const sincronizadas = useVentasOffline("SINCRONIZADA")
   const [tab, setTab] = useState<Tab>("pendientes")
   const [sincronizandoTodas, setSincronizandoTodas] = useState(false)
 

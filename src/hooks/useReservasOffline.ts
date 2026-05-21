@@ -7,19 +7,20 @@ import { OFFLINE_MODE_ENABLED } from "@/lib/feature-flags"
 
 /**
  * Devuelve las reservas no consumidas y no expiradas.
+ * Garantiza `ReservaLocal[]` siempre (nunca undefined).
  */
 export function useReservasDisponibles(): ReservaLocal[] {
-  return useLiveQuery<ReservaLocal[]>(
-    async () => {
+  const r = useLiveQuery(
+    async (): Promise<ReservaLocal[]> => {
       if (!OFFLINE_MODE_ENABLED) return []
       const ahora = new Date().toISOString()
       return getOfflineDB().reservas
-        .filter((r) => !r.consumida && r.expiraEn > ahora)
+        .filter((x) => !x.consumida && x.expiraEn > ahora)
         .toArray()
     },
     [],
-    [],
-  ) ?? []
+  )
+  return r ?? []
 }
 
 /**
@@ -31,16 +32,16 @@ export function useTomarReserva() {
     if (!OFFLINE_MODE_ENABLED) return null
     const db = getOfflineDB()
     const ahora = new Date().toISOString()
-    return db.transaction("rw", db.reservas, async () => {
+    const resultado = await db.transaction("rw", db.reservas, async () => {
       const candidatos = await db.reservas
         .filter((r) => !r.consumida && r.expiraEn > ahora)
         .toArray()
       if (candidatos.length === 0) return null
-      // Ordenar por numeroValor para usar siempre el más bajo primero
       candidatos.sort((a, b) => a.numeroValor - b.numeroValor)
       const elegido = candidatos[0]
       await db.reservas.update(elegido.numeroFormateado, { consumida: true })
       return { ...elegido, consumida: true }
     })
+    return resultado
   }, [])
 }
