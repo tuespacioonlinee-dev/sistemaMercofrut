@@ -502,6 +502,35 @@ tests/
 | Service Worker cachea versión vieja del bundle tras deploy | `@ducanh2912/next-pwa` viene con `skipWaiting + clientsClaim`. Banner verde notifica si hay update. |
 | **El usuario habilita el flag sin entender** | Documentación en este archivo + checklist en `.env.example`. Aviso explícito en commit messages. |
 
+## 12.b — LIMITACIÓN conocida: SSR fetch en `/ventas/nueva`
+
+`/ventas/nueva/page.tsx` es Server Component que hace `obtenerClientes()` +
+`prisma.producto.findMany()` durante SSR. **Si el usuario está realmente
+offline y recarga la página, el SSR fetch falla y la página no renderiza.**
+
+El modo offline funciona en este escenario:
+- Usuario navega a `/ventas/nueva` mientras está **online**: la página carga OK.
+- Pierde conexión mientras está en la página: `useConnectivity` lo detecta,
+  `FormVentaSwitch` bifurca a `FormVentaOffline` que usa Dexie. **OK**.
+
+Pero NO funciona si:
+- Usuario recarga `/ventas/nueva` mientras está offline (F5, navegación dura):
+  el server no responde y el HTML no se cachea por defecto.
+
+**Cómo se comunica al usuario:**
+- Banner permanente en el form offline avisa "No recargues la página estando
+  offline".
+- El banner general de "Modo offline" también queda visible en el layout.
+
+**Mejora futura (out of scope ahora):**
+- Opción A: convertir `/ventas/nueva` a Client Component que lea de Dexie
+  cuando offline. Más invasivo, afecta el flow online testeado.
+- Opción B: PWA runtime caching de la página HTML con stale-while-revalidate.
+- Opción C: pantalla dedicada `/ventas/offline` que solo renderiza offline.
+
+Para go-live actual, la limitación es aceptable: el operador trabaja desde
+una pestaña abierta, y los cortes de red breves no implican recarga.
+
 ## 13. Riesgo CERO de regresión
 
 **Garantía:** mientras `OFFLINE_MODE_ENABLED=false`:

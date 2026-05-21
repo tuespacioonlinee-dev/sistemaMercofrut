@@ -133,9 +133,9 @@ async function asegurarReservasDisponibles(): Promise<void> {
   try {
     const db = getOfflineDB()
     const ahora = new Date().toISOString()
+    // Dexie no indexa booleans — el chequeo va por filter directo.
     const disponibles = await db.reservas
-      .where("consumida").equals(0 as never)
-      .filter((r) => r.expiraEn > ahora)
+      .filter((r) => !r.consumida && r.expiraEn > ahora)
       .count()
 
     if (disponibles >= RESERVAS_MIN_DISPONIBLE) return

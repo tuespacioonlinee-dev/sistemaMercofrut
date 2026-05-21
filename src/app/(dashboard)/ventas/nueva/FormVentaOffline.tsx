@@ -61,36 +61,46 @@ export function FormVentaOffline() {
       return
     }
 
+    // 1. Validar TODO antes de gastar una reserva — si algo falla acá, el
+    //    número no se quema. La toma de reserva queda como última acción.
+    const clienteSnap = clientes.find((c) => c.id === clienteId)
+    if (!clienteSnap) {
+      toast.error("Cliente no encontrado en el snapshot local.")
+      return
+    }
+
+    const lineasSnap: LineaSnap[] = []
+    for (const l of lineas) {
+      if (!l.productoId || l.cantidad <= 0) continue
+      const p = productos.find((x) => x.id === l.productoId)
+      if (!p) {
+        toast.error(`Producto ${l.productoId} no está en el snapshot local.`)
+        return
+      }
+      lineasSnap.push({
+        productoId:     l.productoId,
+        productoNombre: p.nombre,
+        productoCodigo: p.codigo,
+        unidadId:       p.unidadBaseId,
+        unidadAbrev:    p.unidadBaseAbrev,
+        cantidad:       l.cantidad,
+        precioUnitario: l.precio,
+        subtotal:       l.cantidad * l.precio,
+      })
+    }
+    if (lineasSnap.length === 0) {
+      toast.error("Agregá al menos una línea válida")
+      return
+    }
+
     setGuardando(true)
     try {
-      // 1. Tomar reserva
+      // 2. Recién ahora tomamos la reserva — todo lo demás ya está validado.
       const reserva = await tomarReserva()
       if (!reserva) {
         toast.error("No quedan números de remito disponibles offline.")
         return
       }
-
-      const clienteSnap = clientes.find((c) => c.id === clienteId)
-      if (!clienteSnap) {
-        toast.error("Cliente no encontrado en el snapshot local.")
-        return
-      }
-
-      const lineasSnap: LineaSnap[] = lineas
-        .filter((l) => l.productoId && l.cantidad > 0)
-        .map((l) => {
-          const p = productos.find((x) => x.id === l.productoId)!
-          return {
-            productoId:     l.productoId,
-            productoNombre: p.nombre,
-            productoCodigo: p.codigo,
-            unidadId:       p.unidadBaseId,
-            unidadAbrev:    p.unidadBaseAbrev,
-            cantidad:       l.cantidad,
-            precioUnitario: l.precio,
-            subtotal:       l.cantidad * l.precio,
-          }
-        })
 
       const id = generarClientRequestId()
       const ventaOffline: VentaOffline = {
@@ -136,6 +146,10 @@ export function FormVentaOffline() {
           </p>
           <p className="text-xs text-amber-700 mt-2">
             Reservas disponibles: <strong>{reservas.length}</strong>
+          </p>
+          <p className="text-xs text-amber-700 mt-1 italic">
+            ⚠️ No recargues la página estando offline — el servidor no podrá responder.
+            Si necesitás recargar, esperá a recuperar conexión.
           </p>
         </div>
       </div>

@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server"
 import { OFFLINE_MODE_ENABLED } from "@/lib/feature-flags"
 import { obtenerEstadoLockMultiDispositivo } from "@/server/actions/offline"
+import { AuthorizationError } from "@/lib/auth-guards"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -22,6 +23,14 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "fingerprint requerido" }, { status: 400 })
   }
 
-  const r = await obtenerEstadoLockMultiDispositivo(fingerprint)
-  return NextResponse.json(r)
+  try {
+    const r = await obtenerEstadoLockMultiDispositivo(fingerprint)
+    return NextResponse.json(r)
+  } catch (e) {
+    if (e instanceof AuthorizationError) {
+      return NextResponse.json({ error: e.message }, { status: 401 })
+    }
+    const msg = e instanceof Error ? e.message : "Error interno"
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
 }

@@ -368,11 +368,11 @@ export async function sincronizarVentaOffline(input: unknown) {
       origenId:    venta.id,
     })
 
-    // Decrementar el contador de pendientes del dispositivo
-    await tx.dispositivoActivo.update({
-      where: { id: dispositivo.id },
-      data:  { ventasOfflinePendientes: { decrement: 1 } },
-    })
+    // Nota: el campo DispositivoActivo.ventasOfflinePendientes queda en su
+    // valor por defecto (0). Como las ventas offline viven en IndexedDB del
+    // cliente, el server no las cuenta proactivamente — cada dispositivo ve
+    // sus propios pendientes desde Dexie. Si en el futuro queremos exponerlo
+    // server-side, agregaríamos un endpoint que el cliente llama al cargar.
   }, { maxWait: 10_000, timeout: 30_000 })
 
   revalidatePath("/ventas")
