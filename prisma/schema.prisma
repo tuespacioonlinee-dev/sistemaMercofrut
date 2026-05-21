@@ -39,6 +39,8 @@ model Usuario {
   movimientosCaja    MovimientoCaja[]
   movimientosCuenta  MovimientoCuenta[]
   notasEmitidas      NotaCreditoDebito[] @relation("NotaCreadaPor")
+  dispositivos       DispositivoActivo[] @relation("DispositivosUsuario")
+  reservasOffline    NumeroComprobanteReservado[] @relation("ReservasNumero")
 
   @@index([email])
 }
@@ -729,6 +731,62 @@ model LineaNotaCreditoDebito {
 
   @@index([notaId])
   @@index([productoId])
+}
+
+// ============================================================================
+// MODO OFFLINE LIMITADO (Bloque Offline)
+// ============================================================================
+//
+// Solo activo si OFFLINE_MODE_ENABLED=true en el server. Las server actions
+// que tocan estos modelos validan el flag y retornan error si está apagado.
+// Las migraciones son aditivas — no tocan tablas existentes.
+
+enum EstadoDispositivo {
+  ONLINE
+  OFFLINE
+}
+
+model DispositivoActivo {
+  id              String            @id @default(cuid())
+  usuarioId       String
+  fingerprint     String            @unique // ID estable generado por el cliente
+  nombre          String?           // ej "Chrome - PC Mostrador"
+  estado          EstadoDispositivo @default(ONLINE)
+  ultimoHeartbeat DateTime          @default(now())
+  ventasOfflinePendientes Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  usuario  Usuario                       @relation("DispositivosUsuario", fields: [usuarioId], references: [id])
+  reservas NumeroComprobanteReservado[]
+
+  @@index([usuarioId])
+  @@index([estado, ultimoHeartbeat])
+}
+
+model NumeroComprobanteReservado {
+  id               String           @id @default(cuid())
+  tipo             TipoComprobante
+  letra            LetraComprobante
+  puntoVenta       Int
+  numero           Int              // valor de SecuenciaComprobante.ultimoNumero ya consumido
+  numeroFormateado String           // ej "0001-00000124"
+  token            String           // identifica el lote de reserva
+  dispositivoId    String
+  usuarioId        String
+  reservadoEn      DateTime         @default(now())
+  expiraEn         DateTime         // reservadoEn + TTL (24h por default)
+  consumido        Boolean          @default(false)
+  ventaIdConsumida String?          @unique  // FK opcional cuando se sincroniza
+
+  dispositivo DispositivoActivo @relation(fields: [dispositivoId], references: [id])
+  usuario     Usuario           @relation("ReservasNumero", fields: [usuarioId], references: [id])
+
+  @@unique([tipo, letra, puntoVenta, numero])
+  @@index([token])
+  @@index([dispositivoId])
+  @@index([expiraEn, consumido])
 }
 
 // ============================================================================
