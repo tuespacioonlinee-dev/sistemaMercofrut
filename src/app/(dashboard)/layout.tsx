@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { NavLink } from "@/components/shared/NavLink"
 import { LogoutButton } from "@/components/shared/LogoutButton"
 import { OfflineBanner } from "@/components/shared/OfflineBanner"
+import { OfflineBootstrap } from "@/components/shared/OfflineBootstrap"
 import { Toaster } from "@/components/ui/sonner"
 import { getEmpresa } from "@/lib/empresa"
 import {
@@ -97,6 +98,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <OfflineBanner />
         <div className="p-6">{children}</div>
       </main>
+      {/* Bootstrap del sync background — null si el flag está apagado */}
+      <OfflineBootstrap />
       <Toaster richColors position="top-right" />
     </div>
   )
