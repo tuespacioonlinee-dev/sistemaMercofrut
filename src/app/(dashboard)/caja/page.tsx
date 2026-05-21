@@ -7,6 +7,7 @@ import { type TipoMovCaja, type CategoriaMovCaja, etiquetasCategoria } from "@/l
 import { FormAperturaCaja } from "./FormAperturaCaja"
 import { FormMovimiento } from "./FormMovimiento"
 import { FormCierreCaja } from "./FormCierreCaja"
+import { OfflineGuard } from "@/components/shared/OfflineGuard"
 import Link from "next/link"
 import { buttonVariants } from "@/components/ui/button"
 import { History } from "lucide-react"
@@ -14,6 +15,14 @@ import { History } from "lucide-react"
 export const dynamic = "force-dynamic"
 
 export default async function CajaPage() {
+  return (
+    <OfflineGuard motivo="La gestión de caja requiere registrar movimientos en tiempo real contra el servidor.">
+      <CajaPageInner />
+    </OfflineGuard>
+  )
+}
+
+async function CajaPageInner() {
   const caja = await obtenerCajaAbierta()
 
   if (!caja) {

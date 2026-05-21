@@ -19,8 +19,9 @@ import { RolUsuario } from "@prisma/client"
 
 const ROLES_OFFLINE = [RolUsuario.ADMIN, RolUsuario.VENDEDOR] as const
 
-/** TTL de cada reserva en milisegundos (24h). */
-export const RESERVA_TTL_MS = 24 * 60 * 60 * 1000
+/** TTL de cada reserva en milisegundos (24h). Local — no se puede exportar
+ *  desde un archivo "use server" porque Next.js solo permite async functions. */
+const RESERVA_TTL_MS = 24 * 60 * 60 * 1000
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers privados
