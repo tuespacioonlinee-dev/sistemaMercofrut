@@ -2,6 +2,7 @@ import { obtenerResumenStock, obtenerComprasPorMes, obtenerLotesCriticos } from 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
+import { OfflineGuard } from "@/components/shared/OfflineGuard"
 import {
   Package, TrendingDown, AlertTriangle, PackageX,
   ShoppingBag, Building2, CalendarClock, DollarSign,
@@ -16,6 +17,14 @@ const $ar = (n: number) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n)
 
 export default async function ReportesPage() {
+  return (
+    <OfflineGuard motivo="Los reportes leen datos agregados en vivo del servidor.">
+      <ReportesPageInner />
+    </OfflineGuard>
+  )
+}
+
+async function ReportesPageInner() {
   const [stock, compras, lotesCriticos] = await Promise.all([
     obtenerResumenStock(),
     obtenerComprasPorMes(6),

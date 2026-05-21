@@ -44,6 +44,15 @@ yarn-error.log*
 /playwright/.cache/
 /playwright/.auth/
 
+# PWA — generados por @ducanh2912/next-pwa en build, no commitear
+/public/sw.js
+/public/sw.js.map
+/public/workbox-*.js
+/public/workbox-*.js.map
+/public/swe-worker-*.js
+/public/swe-worker-*.js.map
+/public/fallback-*.js
+
 # PR draft local
 .pr-body.md
 .pr-body-*.md

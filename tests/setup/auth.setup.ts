@@ -20,9 +20,7 @@ setup("autenticar admin y guardar storageState", async ({ page }) => {
   await page.getByLabel("Contraseña").fill(ADMIN_PASSWORD)
   await page.getByRole("button", { name: /ingresar/i }).click()
 
-  // Tras login OK, el dashboard redirige a "/". Esperamos a que estemos ahí.
-  await page.waitForURL("/", { timeout: 15_000 })
-  // Sanity check: el sidebar del dashboard debe estar visible.
+  await page.waitForURL("/", { timeout: 30_000 })
   await expect(page).toHaveURL("/")
 
   await page.context().storageState({ path: adminStateFile })

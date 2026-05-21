@@ -2,7 +2,7 @@ import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
 import { obtenerClientes } from "@/server/actions/clientes"
 import { prisma } from "@/lib/prisma"
-import { FormVenta } from "./FormVenta"
+import { FormVentaSwitch } from "./FormVentaSwitch"
 import { crearVenta } from "@/server/actions/ventas"
 import { VentaInput } from "@/lib/validaciones/ventas"
 
@@ -61,7 +61,7 @@ export default async function NuevaVentaPage() {
         </p>
       </div>
 
-      <FormVenta
+      <FormVentaSwitch
         clientes={clientes}
         productos={productos}
         unidades={unidades}

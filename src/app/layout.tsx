@@ -1,8 +1,12 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Geist } from "next/font/google"
 import "./globals.css"
 import { Providers } from "@/components/shared/Providers"
 import { getEmpresa } from "@/lib/empresa"
+
+export const viewport: Viewport = {
+  themeColor: "#0f172a",
+}
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,6 +18,10 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: empresa.nombreFantasia,
     description: "Sistema de gestión comercial",
+    // Manifest del PWA — el SW se registra solo cuando NODE_ENV=production
+    // (ver next.config.ts). El manifest también funciona sin SW activo.
+    manifest: "/manifest.webmanifest",
+    icons: { icon: "/icon.svg" },
   }
 }
 
