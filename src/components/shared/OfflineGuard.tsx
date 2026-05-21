@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { CloudOff } from "lucide-react"
 import { OFFLINE_MODE_ENABLED } from "@/lib/feature-flags"
@@ -31,8 +32,18 @@ export function OfflineGuard({ children, motivo }: Props) {
 }
 
 function OfflineGuardInner({ children, motivo }: Props) {
+  // SSR-safe: mientras `mounted` es false (SSR + primer client render),
+  // renderizamos children como si fuera online. Recién en useEffect (post-mount)
+  // evaluamos connectivity real. Evita hydration mismatch.
+  const [mounted, setMounted] = useState(false)
   const { online } = useConnectivity()
-  if (online) return <>{children}</>
+
+  useEffect(() => { setMounted(true) }, [])
+
+  // Pre-mount o connectivity todavía desconocida → mostrar children
+  // (no bloquear UI optimistamente; si después detectamos offline, re-render).
+  if (!mounted) return <>{children}</>
+  if (online !== false) return <>{children}</>
 
   return (
     <div className="flex flex-col items-center justify-center py-20 px-6 text-center max-w-md mx-auto">

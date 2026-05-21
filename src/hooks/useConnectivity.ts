@@ -7,24 +7,36 @@ const PING_INTERVAL_MS = 30_000
 const PING_TIMEOUT_MS = 5_000
 
 export interface ConnectivityState {
-  online: boolean
+  /**
+   * `null` durante el primer render (SSR-safe). Después del mount client-only
+   * es boolean. Consumidores deberían tratar `null` como "todavía no sabemos"
+   * y NO mostrar UI dependiente del estado hasta que sea boolean.
+   *
+   * Si OFFLINE_MODE_ENABLED=false, siempre `true` desde el primer render.
+   */
+  online: boolean | null
   lastCheck: Date | null
   forceCheck: () => Promise<void>
 }
 
 /**
- * Hook que devuelve el estado real de conectividad combinando navigator.onLine
- * con un ping a /api/healthcheck cada 30s.
+ * Hook SSR-safe que devuelve el estado real de conectividad.
  *
- * Si OFFLINE_MODE_ENABLED=false el hook siempre devuelve { online: true }
- * sin hacer ping. Cero overhead cuando el flag está apagado.
+ * Estrategia anti-hydration-mismatch: cuando OFFLINE_MODE_ENABLED=true,
+ * el estado inicial es `null` (tanto en server como en client primer render).
+ * En el useEffect (client-only post-mount) se setea el valor real desde
+ * navigator.onLine + ping a /api/healthcheck.
+ *
+ * Si OFFLINE_MODE_ENABLED=false, devuelve siempre `{ online: true }` sin
+ * polling. Cero overhead cuando el flag está apagado.
  */
 export function useConnectivity(): ConnectivityState {
-  const [online, setOnline] = useState<boolean>(() => {
-    if (!OFFLINE_MODE_ENABLED) return true
-    if (typeof navigator === "undefined") return true
-    return navigator.onLine
-  })
+  // Estado inicial determinístico entre server y client → evita hydration mismatch.
+  // Flag ON: arrancamos en `null` (estado "desconocido") y se resuelve en useEffect.
+  // Flag OFF: arrancamos en `true` siempre.
+  const [online, setOnline] = useState<boolean | null>(
+    OFFLINE_MODE_ENABLED ? null : true,
+  )
   const [lastCheck, setLastCheck] = useState<Date | null>(null)
   const inFlightRef = useRef<boolean>(false)
 
@@ -56,17 +68,21 @@ export function useConnectivity(): ConnectivityState {
   useEffect(() => {
     if (!OFFLINE_MODE_ENABLED) return
 
-    // Chequeo inicial
+    // Estado inicial real desde navigator.onLine — solo después de mount
+    // (ya pasamos hydration, no hay mismatch).
+    if (typeof navigator !== "undefined") {
+      setOnline(navigator.onLine)
+    }
+
+    // Primer chequeo contra el server.
     void check()
 
-    // Polling cada 30s mientras la pestaña esté activa
     const id = setInterval(() => {
       if (document.visibilityState === "visible") {
         void check()
       }
     }, PING_INTERVAL_MS)
 
-    // Eventos del navegador para re-check inmediato
     const onOnline = () => void check()
     const onOffline = () => setOnline(false)
     const onVisible = () => {

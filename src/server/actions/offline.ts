@@ -15,7 +15,7 @@ import {
   obtenerPuntoVentaDefault,
 } from "@/server/lib/numeracion"
 import { registrarMovimientoCajaEnTx } from "@/server/actions/caja"
-import { RolUsuario } from "@prisma/client"
+import { Prisma, RolUsuario } from "@prisma/client"
 
 const ROLES_OFFLINE = [RolUsuario.ADMIN, RolUsuario.VENDEDOR] as const
 
@@ -34,6 +34,28 @@ function ensureFlagActivo() {
   return null
 }
 
+/**
+ * Detecta errores de "tabla no existe" que ocurren cuando alguien activa el
+ * flag sin haber corrido las migraciones del modo offline.
+ *
+ * Prisma lanza P2021 con `meta.table` indicando la tabla faltante.
+ * También cubre P2022 (columna no existe) por las dudas.
+ */
+function esTablaOffline404(e: unknown): boolean {
+  if (!(e instanceof Prisma.PrismaClientKnownRequestError)) return false
+  if (e.code !== "P2021" && e.code !== "P2022") return false
+  const meta = e.meta as { table?: string; column?: string } | undefined
+  const ref = `${meta?.table ?? ""} ${meta?.column ?? ""}`
+  return /DispositivoActivo|NumeroComprobanteReservado/i.test(ref)
+}
+
+/**
+ * Mensaje legible cuando las migraciones del modo offline no se aplicaron.
+ */
+const MENSAJE_MIGRACIONES_FALTAN =
+  "Modo offline: las migraciones de DB no están aplicadas en este servidor. " +
+  "Pediles a quien deployó que corra `prisma migrate deploy`."
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 1) Heartbeat — registra/actualiza el estado del dispositivo
 // ─────────────────────────────────────────────────────────────────────────────
@@ -47,23 +69,29 @@ export async function heartbeat(input: unknown) {
   const parsed = esquemaHeartbeat.safeParse(input)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
 
-  const dispositivo = await prisma.dispositivoActivo.upsert({
-    where:  { fingerprint: parsed.data.fingerprint },
-    update: {
-      estado:          parsed.data.estado,
-      ultimoHeartbeat: new Date(),
-      nombre:          parsed.data.nombre ?? undefined,
-    },
-    create: {
-      usuarioId:       session.user.id,
-      fingerprint:     parsed.data.fingerprint,
-      nombre:          parsed.data.nombre ?? null,
-      estado:          parsed.data.estado,
-    },
-    select: { id: true, estado: true, ultimoHeartbeat: true },
-  })
-
-  return { ok: true, dispositivoId: dispositivo.id, estado: dispositivo.estado }
+  try {
+    const dispositivo = await prisma.dispositivoActivo.upsert({
+      where:  { fingerprint: parsed.data.fingerprint },
+      update: {
+        estado:          parsed.data.estado,
+        ultimoHeartbeat: new Date(),
+        nombre:          parsed.data.nombre ?? undefined,
+      },
+      create: {
+        usuarioId:       session.user.id,
+        fingerprint:     parsed.data.fingerprint,
+        nombre:          parsed.data.nombre ?? null,
+        estado:          parsed.data.estado,
+      },
+      select: { id: true, estado: true, ultimoHeartbeat: true },
+    })
+    return { ok: true, dispositivoId: dispositivo.id, estado: dispositivo.estado }
+  } catch (e) {
+    if (esTablaOffline404(e)) {
+      return { error: MENSAJE_MIGRACIONES_FALTAN, migracionesFaltan: true }
+    }
+    throw e
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -86,7 +114,17 @@ export async function reservarRangoOffline(input: unknown) {
 
   // Todo dentro de una sola transacción para que si algo falla,
   // ninguna secuencia avanza y ninguna reserva queda persistida.
-  const reservas = await prisma.$transaction(async (tx) => {
+  let reservas: Array<{
+    token: string
+    numero: number
+    numeroFormateado: string
+    tipo: typeof tipo
+    letra: typeof letra
+    puntoVenta: number
+    expiraEn: Date
+  }>
+  try {
+    reservas = await prisma.$transaction(async (tx) => {
     // Asegurar dispositivo
     const dispositivo = await tx.dispositivoActivo.upsert({
       where:  { fingerprint },
@@ -141,7 +179,13 @@ export async function reservarRangoOffline(input: unknown) {
     }
 
     return filas
-  }, { maxWait: 10_000, timeout: 30_000 })
+    }, { maxWait: 10_000, timeout: 30_000 })
+  } catch (e) {
+    if (esTablaOffline404(e)) {
+      return { error: MENSAJE_MIGRACIONES_FALTAN, migracionesFaltan: true }
+    }
+    throw e
+  }
 
   return { ok: true, token, reservas }
 }
@@ -204,7 +248,8 @@ export async function sincronizarVentaOffline(input: unknown) {
   let remitoId: string
   let yaSincronizada = false
 
-  await prisma.$transaction(async (tx) => {
+  try {
+    await prisma.$transaction(async (tx) => {
     // Idempotency: si clientRequestId ya existe, retornar la venta existente.
     const existente = await tx.venta.findUnique({
       where: { clientRequestId },
@@ -368,12 +413,18 @@ export async function sincronizarVentaOffline(input: unknown) {
       origenId:    venta.id,
     })
 
-    // Nota: el campo DispositivoActivo.ventasOfflinePendientes queda en su
-    // valor por defecto (0). Como las ventas offline viven en IndexedDB del
-    // cliente, el server no las cuenta proactivamente — cada dispositivo ve
-    // sus propios pendientes desde Dexie. Si en el futuro queremos exponerlo
-    // server-side, agregaríamos un endpoint que el cliente llama al cargar.
-  }, { maxWait: 10_000, timeout: 30_000 })
+      // Nota: el campo DispositivoActivo.ventasOfflinePendientes queda en su
+      // valor por defecto (0). Como las ventas offline viven en IndexedDB del
+      // cliente, el server no las cuenta proactivamente — cada dispositivo ve
+      // sus propios pendientes desde Dexie. Si en el futuro queremos exponerlo
+      // server-side, agregaríamos un endpoint que el cliente llama al cargar.
+    }, { maxWait: 10_000, timeout: 30_000 })
+  } catch (e) {
+    if (esTablaOffline404(e)) {
+      return { error: MENSAJE_MIGRACIONES_FALTAN, migracionesFaltan: true }
+    }
+    throw e
+  }
 
   revalidatePath("/ventas")
   revalidatePath("/remitos")
@@ -394,18 +445,25 @@ export async function liberarReservasExpiradas() {
 
   await requireSession()
 
-  const r = await prisma.numeroComprobanteReservado.deleteMany({
-    where: { consumido: false, expiraEn: { lt: new Date() } },
-  })
+  try {
+    const r = await prisma.numeroComprobanteReservado.deleteMany({
+      where: { consumido: false, expiraEn: { lt: new Date() } },
+    })
 
-  // Además, marcar como OFFLINE dispositivos sin heartbeat reciente (>5 min)
-  const limite = new Date(Date.now() - 5 * 60 * 1000)
-  const d = await prisma.dispositivoActivo.updateMany({
-    where: { estado: "ONLINE", ultimoHeartbeat: { lt: limite } },
-    data:  { estado: "OFFLINE" },
-  })
+    // Además, marcar como OFFLINE dispositivos sin heartbeat reciente (>5 min)
+    const limite = new Date(Date.now() - 5 * 60 * 1000)
+    const d = await prisma.dispositivoActivo.updateMany({
+      where: { estado: "ONLINE", ultimoHeartbeat: { lt: limite } },
+      data:  { estado: "OFFLINE" },
+    })
 
-  return { ok: true, reservasLiberadas: r.count, dispositivosMarcadosOffline: d.count }
+    return { ok: true, reservasLiberadas: r.count, dispositivosMarcadosOffline: d.count }
+  } catch (e) {
+    if (esTablaOffline404(e)) {
+      return { error: MENSAJE_MIGRACIONES_FALTAN, migracionesFaltan: true }
+    }
+    throw e
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -418,16 +476,25 @@ export async function obtenerEstadoLockMultiDispositivo(fingerprintActual: strin
   }
   await requireSession()
 
-  const otros = await prisma.dispositivoActivo.findMany({
-    where: {
-      fingerprint: { not: fingerprintActual },
-      estado:      "OFFLINE",
-    },
-    select: { fingerprint: true, nombre: true, ultimoHeartbeat: true, ventasOfflinePendientes: true },
-  })
+  try {
+    const otros = await prisma.dispositivoActivo.findMany({
+      where: {
+        fingerprint: { not: fingerprintActual },
+        estado:      "OFFLINE",
+      },
+      select: { fingerprint: true, nombre: true, ultimoHeartbeat: true, ventasOfflinePendientes: true },
+    })
 
-  return {
-    otrosDispositivosOffline: otros.length > 0,
-    dispositivos: otros,
+    return {
+      otrosDispositivosOffline: otros.length > 0,
+      dispositivos: otros,
+    }
+  } catch (e) {
+    // Si las migraciones faltan, degradamos sin romper la UI:
+    // tratamos como "no hay otros dispositivos offline".
+    if (esTablaOffline404(e)) {
+      return { otrosDispositivosOffline: false, dispositivos: [], migracionesFaltan: true as const }
+    }
+    throw e
   }
 }

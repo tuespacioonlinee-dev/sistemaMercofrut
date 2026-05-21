@@ -33,15 +33,25 @@ export function OfflineBanner() {
 }
 
 function OfflineBannerInner() {
+  // SSR-safe: durante el primer render del cliente, `mounted` es false y
+  // retornamos null. Recién después del useEffect (que solo corre client-side)
+  // pasamos a renderizar contenido. Eso garantiza que server-rendered HTML
+  // y client primer render coincidan → cero hydration mismatch.
+  const [mounted, setMounted] = useState(false)
   const { online } = useConnectivity()
   const [lockStatus, setLockStatus] = useState<LockStatus>({
     otrosDispositivosOffline: false,
     dispositivos: [],
   })
 
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   // Chequeo del lock multi-dispositivo cada minuto cuando estamos online.
   useEffect(() => {
-    if (!online) return
+    if (!mounted) return
+    if (online !== true) return // null o false → no consultar
     const fingerprint = getFingerprint()
     if (!fingerprint) return
 
@@ -64,9 +74,16 @@ function OfflineBannerInner() {
     void cargar()
     const id = setInterval(cargar, 60_000)
     return () => { cancelado = true; clearInterval(id) }
-  }, [online])
+  }, [mounted, online])
 
-  if (!online) {
+  // Render nothing until mounted — server-rendered HTML siempre es null,
+  // y el primer client render también. Hydration consistente.
+  if (!mounted) return null
+
+  // online === null significa "todavía no detectamos" — no mostramos banner.
+  if (online === null) return null
+
+  if (online === false) {
     return (
       <div className={cn(
         "w-full px-4 py-2 flex items-center justify-between gap-3 text-sm",
