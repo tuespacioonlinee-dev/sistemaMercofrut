@@ -25,10 +25,22 @@ const withPWA = withPWAInit({
   workboxOptions: {
     skipWaiting: true,
     clientsClaim: true,
+    // Runtime caching: páginas de /ventas accesibles incluso sin red. Las APIs
+    // NO se cachean — esos requests deben fallar limpio para que el cliente
+    // detecte el estado offline. Usamos RegExp (más estable que funciones,
+    // que workbox serializa al SW y pueden romper bundling).
+    runtimeCaching: [
+      {
+        urlPattern: /\/ventas(\/.*)?$/,
+        handler: "NetworkFirst",
+        options: {
+          cacheName: "pages-ventas",
+          expiration: { maxAgeSeconds: 60 * 60 * 24 }, // 24h
+          networkTimeoutSeconds: 3,
+        },
+      },
+    ],
   },
-  // NO interceptamos fetch a /api/* — esos requests deben fallar limpio
-  // cuando no hay red, así el cliente detecta el offline correctamente.
-  // El cache es solo para assets estáticos (HTML, JS, CSS, fuentes).
   cacheOnFrontEndNav: true,
 })
 

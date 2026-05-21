@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { CloudOff, Plus, Trash2 } from "lucide-react"
+import { CloudOff, Plus, Trash2, ClipboardList } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,6 +13,8 @@ import { generarClientRequestId } from "@/lib/submit-helpers"
 import { getOfflineDB, type VentaOffline, type LineaSnap } from "@/lib/offline-db"
 import { useSnapshotClientes, useSnapshotProductos } from "@/hooks/useSnapshotsOffline"
 import { useReservasDisponibles, useTomarReserva } from "@/hooks/useReservasOffline"
+import { useVentasPendientesCount } from "@/hooks/useVentasOffline"
+import { useConnectivity } from "@/hooks/useConnectivity"
 
 /**
  * Form de venta en modo offline.
@@ -26,17 +28,41 @@ import { useReservasDisponibles, useTomarReserva } from "@/hooks/useReservasOffl
  */
 export function FormVentaOffline() {
   const router = useRouter()
+  const { online } = useConnectivity()
   const clientes = useSnapshotClientes()
   const productos = useSnapshotProductos()
   const reservas = useReservasDisponibles()
   const tomarReserva = useTomarReserva()
+  const pendientesCount = useVentasPendientesCount()
 
+  const ESTADO_INICIAL_LINEAS = [{ productoId: "", cantidad: 1, precio: 0 }]
   const [clienteId, setClienteId] = useState<string>("")
-  const [lineas, setLineas] = useState<Array<{ productoId: string; cantidad: number; precio: number }>>([
-    { productoId: "", cantidad: 1, precio: 0 },
-  ])
+  const [lineas, setLineas] = useState<Array<{ productoId: string; cantidad: number; precio: number }>>(
+    ESTADO_INICIAL_LINEAS,
+  )
   const [observaciones, setObservaciones] = useState("")
   const [guardando, setGuardando] = useState(false)
+  const [ultimoNumeroGuardado, setUltimoNumeroGuardado] = useState<string | null>(null)
+
+  /** Resetea el form a su estado inicial — usado tras guardar exitosamente. */
+  function resetearForm() {
+    setClienteId("")
+    setLineas([{ productoId: "", cantidad: 1, precio: 0 }])
+    setObservaciones("")
+  }
+
+  /**
+   * Navegación segura a /ventas/sincronizar.
+   * Solo navega si estamos ONLINE. Offline NO se hace router.push porque
+   * Next intentaría hacer RSC fetch al server que falla por falta de red.
+   */
+  function irAPendientesSiOnline() {
+    if (online === true) {
+      router.push("/ventas/sincronizar")
+    } else {
+      toast.info("Necesitás conexión para abrir esta pantalla. Recuperá internet primero.")
+    }
+  }
 
   const subtotal = lineas.reduce((acc, l) => acc + l.cantidad * l.precio, 0)
   const total = subtotal
@@ -123,11 +149,18 @@ export function FormVentaOffline() {
 
       await getOfflineDB().ventasOffline.add(ventaOffline)
 
+      // IMPORTANTE: NO hacemos router.push() — en modo offline Next intentaría
+      // hacer un RSC fetch al server que falla por falta de red. En su lugar
+      // mostramos toast de éxito y limpiamos el form para cargar otra venta.
+      // El usuario puede ir a /ventas/sincronizar manualmente cuando recupere
+      // conexión (botón visible en el form que valida online antes de navegar).
       toast.success(
         `Venta guardada localmente con remito ${reserva.numeroFormateado}. ` +
         `Se sincronizará al volver internet.`,
+        { duration: 6000 },
       )
-      router.push("/ventas/sincronizar")
+      setUltimoNumeroGuardado(reserva.numeroFormateado)
+      resetearForm()
     } finally {
       setGuardando(false)
     }
@@ -138,7 +171,7 @@ export function FormVentaOffline() {
       {/* Aviso modo offline */}
       <div className="border border-amber-300 bg-amber-50 rounded-lg p-4 flex items-start gap-3">
         <CloudOff className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
-        <div className="text-sm">
+        <div className="text-sm flex-1">
           <p className="font-semibold text-amber-900">Estás cargando una venta sin conexión.</p>
           <p className="text-amber-800 mt-0.5">
             Condición forzada a <strong>CONTADO</strong> (no se puede consultar cuenta corriente offline).
@@ -146,13 +179,46 @@ export function FormVentaOffline() {
           </p>
           <p className="text-xs text-amber-700 mt-2">
             Reservas disponibles: <strong>{reservas.length}</strong>
+            {pendientesCount > 0 && (
+              <> · Pendientes de sincronizar: <strong>{pendientesCount}</strong></>
+            )}
           </p>
           <p className="text-xs text-amber-700 mt-1 italic">
             ⚠️ No recargues la página estando offline — el servidor no podrá responder.
             Si necesitás recargar, esperá a recuperar conexión.
           </p>
         </div>
+        {pendientesCount > 0 && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={irAPendientesSiOnline}
+            className="shrink-0"
+            title={online === true ? "Ir a la pantalla de sincronización" : "Necesita conexión"}
+          >
+            <ClipboardList className="h-4 w-4 mr-1.5" />
+            Ver {pendientesCount} pendiente{pendientesCount !== 1 ? "s" : ""}
+          </Button>
+        )}
       </div>
+
+      {/* Confirmación de última venta guardada offline */}
+      {ultimoNumeroGuardado && (
+        <div className="border border-emerald-300 bg-emerald-50 rounded-lg p-3 text-sm flex items-center justify-between gap-3">
+          <span className="text-emerald-900">
+            ✓ Última venta guardada localmente con remito <strong className="font-mono">{ultimoNumeroGuardado}</strong>.
+            Continuá cargando o esperá a volver online para sincronizar.
+          </span>
+          <button
+            type="button"
+            onClick={() => setUltimoNumeroGuardado(null)}
+            className="text-xs text-emerald-700 hover:text-emerald-900 shrink-0"
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
 
       {/* Cliente */}
       <div className="space-y-1">
