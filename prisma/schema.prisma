@@ -27,6 +27,12 @@ model Usuario {
   rol          RolUsuario  @default(CONSULTA)
   activo       Boolean     @default(true)
 
+  // Si es true, el usuario DEBE cambiar su contraseña en el próximo login antes
+  // de poder usar el sistema. Se activa al crear el usuario o al resetear la
+  // contraseña desde la administración. Se desactiva cuando el usuario la cambia.
+  debeCambiarPassword Boolean   @default(false)
+  passwordCambiadaEn  DateTime?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?

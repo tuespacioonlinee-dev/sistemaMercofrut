@@ -20,6 +20,9 @@ export async function seedClient(
         nombre: "Administrador",
         passwordHash,
         rol: "ADMIN",
+        // La contraseña inicial es temporal: el cliente la cambia obligatoriamente
+        // la primera vez que ingresa. Nosotros (JDC) no conocemos su contraseña final.
+        debeCambiarPassword: true,
       },
     });
 

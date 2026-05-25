@@ -26,6 +26,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: usuario.email,
           name: usuario.nombre,
           rol: usuario.rol,
+          debeCambiarPassword: usuario.debeCambiarPassword,
         }
       },
     }),
@@ -35,12 +36,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id as string
         token.rol = user.rol
+        token.debeCambiarPassword = user.debeCambiarPassword
       }
       return token
     },
     session({ session, token }) {
       session.user.id = token.id
       session.user.rol = token.rol
+      session.user.debeCambiarPassword = token.debeCambiarPassword
       return session
     },
   },

@@ -51,7 +51,9 @@ export async function crearUsuario(formData: unknown) {
   const passwordHash = await bcrypt.hash(password, 10)
 
   await prisma.usuario.create({
-    data: { nombre, email, passwordHash, rol },
+    // Todo usuario nuevo debe definir su propia contraseña en el primer login.
+    // La contraseña que carga el admin acá es solo temporal/inicial.
+    data: { nombre, email, passwordHash, rol, debeCambiarPassword: true },
   })
 
   revalidatePath("/usuarios")
@@ -81,6 +83,10 @@ export async function editarUsuario(id: string, formData: unknown) {
 
   if (password && password.length > 0) {
     data.passwordHash = await bcrypt.hash(password, 10)
+    // Si el admin setea una contraseña nueva, es temporal: el usuario debe
+    // redefinirla en su próximo login.
+    data.debeCambiarPassword = true
+    data.passwordCambiadaEn = null
   }
 
   await prisma.usuario.update({ where: { id }, data })
